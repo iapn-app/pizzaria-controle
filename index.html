@@ -337,13 +337,9 @@
     <i class="ti ti-shopping-cart"></i>
     <span class="nav-label">Vender</span>
   </button>
-  <button data-tab="estoque">
-    <i class="ti ti-box"></i>
-    <span class="nav-label">Estoque</span>
-  </button>
-  <button data-tab="cardapio">
-    <i class="ti ti-list"></i>
-    <span class="nav-label">Cardápio</span>
+  <button data-tab="produtos">
+    <i class="ti ti-pizza"></i>
+    <span class="nav-label">Produtos &amp; Estoque</span>
   </button>
   <button data-tab="historico">
     <i class="ti ti-history"></i>
@@ -431,26 +427,15 @@
     </div>
   </div>
 
-  <!-- ESTOQUE -->
-  <div id="tab-estoque" class="tab-content">
+  <!-- PRODUTOS & ESTOQUE -->
+  <div id="tab-produtos" class="tab-content">
     <div class="page-header">
-      <span class="section-title"><i class="ti ti-box"></i> Estoque Atual</span>
-      <button class="btn btn-success" onclick="abrirModalEntrada()">
-        <i class="ti ti-plus"></i> Entrada de Mercadoria
-      </button>
-    </div>
-    <div class="table-wrap" id="estoque-wrap"></div>
-  </div>
-
-  <!-- CARDÁPIO -->
-  <div id="tab-cardapio" class="tab-content">
-    <div class="page-header">
-      <span class="section-title"><i class="ti ti-list"></i> Cardápio</span>
+      <span class="section-title"><i class="ti ti-pizza"></i> Produtos &amp; Estoque</span>
       <button class="btn btn-primary" onclick="abrirModalCardapio(null)">
-        <i class="ti ti-plus"></i> Novo Item
+        <i class="ti ti-plus"></i> Nova pizza
       </button>
     </div>
-    <div class="table-wrap" id="cardapio-wrap"></div>
+    <div class="table-wrap" id="produtos-wrap"></div>
   </div>
 
   <!-- HISTÓRICO -->
@@ -468,13 +453,11 @@
 <!-- MODAL ENTRADA -->
 <div class="modal-overlay" id="modal-entrada" style="display:none">
   <div class="modal">
-    <h3><i class="ti ti-arrow-bar-up"></i> Entrada de Mercadoria</h3>
+    <h3><i class="ti ti-arrow-bar-up"></i> Entrada de Estoque</h3>
+    <p id="entrada-item-nome" style="font-size:0.875rem;color:var(--gray-600);margin-bottom:1rem;font-weight:500"></p>
+    <input type="hidden" id="entrada-item-id">
     <div class="form-group">
-      <label>Item</label>
-      <select id="entrada-item"></select>
-    </div>
-    <div class="form-group">
-      <label>Quantidade</label>
+      <label>Quantidade a adicionar</label>
       <input type="number" id="entrada-qty" value="10" min="1">
     </div>
     <div class="modal-actions">
@@ -621,8 +604,7 @@ function bindNav() {
 function renderTab(tab) {
   if (tab === 'dashboard') renderDashboard();
   else if (tab === 'vender') renderVender();
-  else if (tab === 'estoque') renderEstoque();
-  else if (tab === 'cardapio') renderCardapio();
+  else if (tab === 'produtos') renderProdutos();
   else if (tab === 'historico') renderHistorico();
 }
 
@@ -843,57 +825,58 @@ function confirmarVenda() {
   renderVender();
 }
 
-// ===================== ESTOQUE =====================
-function renderEstoque() {
+// ===================== PRODUTOS & ESTOQUE =====================
+function renderProdutos() {
   if (state.cardapio.length === 0) {
-    document.getElementById('estoque-wrap').innerHTML = '<div class="empty-state"><i class="ti ti-box-off"></i><p>Nenhum item no cardápio ainda</p></div>';
+    document.getElementById('produtos-wrap').innerHTML = '<div class="empty-state"><i class="ti ti-pizza-off"></i><p>Nenhuma pizza cadastrada ainda</p></div>';
     return;
   }
 
-  const maxQty = Math.max(...state.cardapio.map(i => state.estoque[i.id] || 0), 20);
-
-  document.getElementById('estoque-wrap').innerHTML = `
+  document.getElementById('produtos-wrap').innerHTML = `
     <table>
       <thead><tr>
-        <th>Item</th><th>Quantidade</th><th>Nível Visual</th><th>Status</th>
+        <th>Sabor</th><th>Tamanho</th><th class="hide-mobile">Custo</th><th>Congelada</th><th>Assada</th><th>Estoque</th><th>Status</th><th>Ações</th>
       </tr></thead>
       <tbody>${state.cardapio.map(item => {
         const qty = state.estoque[item.id] || 0;
-        const pct = Math.min(maxQty > 0 ? (qty / maxQty) * 100 : 0, 100);
-        let status, badgeClass, barColor;
-        if (qty === 0) {
-          status = 'Sem estoque'; badgeClass = 'badge-red'; barColor = '#dc3545';
-        } else if (qty <= ESTOQUE_BAIXO) {
-          status = 'Estoque baixo'; badgeClass = 'badge-yellow'; barColor = '#ffc107';
-        } else {
-          status = 'OK'; badgeClass = 'badge-green'; barColor = 'var(--green)';
-        }
+        let status, badgeClass;
+        if (qty === 0) { status = 'Sem estoque'; badgeClass = 'badge-red'; }
+        else if (qty <= ESTOQUE_BAIXO) { status = 'Baixo'; badgeClass = 'badge-yellow'; }
+        else { status = 'OK'; badgeClass = 'badge-green'; }
         return `<tr>
-          <td><strong>${item.sabor}</strong> <span style="color:var(--gray-600)">${item.tamanho}</span></td>
-          <td><strong style="font-size:1rem">${qty}</strong> <span style="color:var(--gray-500);font-size:0.8rem">un.</span></td>
-          <td style="min-width:120px">
-            <div class="stock-bar-wrap">
-              <div class="stock-bar" style="width:${pct.toFixed(1)}%;background:${barColor}"></div>
-            </div>
-          </td>
+          <td><strong>${item.sabor}</strong></td>
+          <td>${item.tamanho}</td>
+          <td class="hide-mobile">${brl(item.custo)}</td>
+          <td>${brl(item.precoCongelada)}</td>
+          <td>${brl(item.precoAssada)}</td>
+          <td><strong>${qty}</strong> <span style="color:var(--gray-500);font-size:0.8rem">un.</span></td>
           <td><span class="badge ${badgeClass}">${status}</span></td>
+          <td style="white-space:nowrap">
+            <button class="btn btn-success btn-sm" onclick="abrirModalEntrada('${item.id}')">
+              <i class="ti ti-plus"></i> Entrada
+            </button>
+            <button class="btn btn-danger btn-sm" style="margin-left:0.3rem" onclick="excluirCardapio('${item.id}')">
+              <i class="ti ti-trash"></i>
+            </button>
+          </td>
         </tr>`;
       }).join('')}
       </tbody>
     </table>`;
 }
 
-function abrirModalEntrada() {
-  const sel = document.getElementById('entrada-item');
-  sel.innerHTML = state.cardapio.map(i =>
-    `<option value="${i.id}">${itemLabel(i)} (atual: ${state.estoque[i.id] || 0} un.)</option>`
-  ).join('');
+function abrirModalEntrada(id) {
+  const item = state.cardapio.find(i => i.id === id);
+  if (!item) return;
+  document.getElementById('entrada-item-id').value = id;
+  document.getElementById('entrada-item-nome').textContent =
+    itemLabel(item) + ' — Estoque atual: ' + (state.estoque[id] || 0) + ' un.';
   document.getElementById('entrada-qty').value = 10;
   document.getElementById('modal-entrada').style.display = 'flex';
 }
 
 function confirmarEntrada() {
-  const itemId = document.getElementById('entrada-item').value;
+  const itemId = document.getElementById('entrada-item-id').value;
   const qty = parseInt(document.getElementById('entrada-qty').value) || 0;
   if (qty <= 0) return toast('Informe uma quantidade válida.', 'error');
   const item = state.cardapio.find(i => i.id === itemId);
@@ -913,45 +896,7 @@ function confirmarEntrada() {
   persist();
   fecharModal('modal-entrada');
   toast(`Entrada de ${qty} un. de ${itemLabel(item)} registrada!`, 'success');
-  renderEstoque();
-}
-
-// ===================== CARDÁPIO =====================
-function renderCardapio() {
-  if (state.cardapio.length === 0) {
-    document.getElementById('cardapio-wrap').innerHTML = '<div class="empty-state"><i class="ti ti-list-x"></i><p>Nenhum sabor cadastrado ainda</p></div>';
-    return;
-  }
-
-  document.getElementById('cardapio-wrap').innerHTML = `
-    <table>
-      <thead><tr>
-        <th>Sabor</th><th>Tamanho</th><th>Custo</th><th>Congelada</th><th>Assada</th><th>Margem</th><th>Ações</th>
-      </tr></thead>
-      <tbody>${state.cardapio.map(item => {
-        const margem = item.precoCongelada > 0
-          ? Math.round(((item.precoCongelada - item.custo) / item.precoCongelada) * 100)
-          : 0;
-        const margemClass = margem >= 40 ? 'badge-green' : margem >= 25 ? 'badge-yellow' : 'badge-red';
-        return `<tr>
-          <td><strong>${item.sabor}</strong></td>
-          <td>${item.tamanho}</td>
-          <td>${brl(item.custo)}</td>
-          <td>${brl(item.precoCongelada)}</td>
-          <td>${brl(item.precoAssada)}</td>
-          <td><span class="badge ${margemClass}">${margem}%</span></td>
-          <td>
-            <button class="btn btn-secondary btn-sm" onclick="abrirModalCardapio('${item.id}')">
-              <i class="ti ti-pencil"></i>
-            </button>
-            <button class="btn btn-danger btn-sm" style="margin-left:0.3rem" onclick="excluirCardapio('${item.id}')">
-              <i class="ti ti-trash"></i>
-            </button>
-          </td>
-        </tr>`;
-      }).join('')}
-      </tbody>
-    </table>`;
+  renderProdutos();
 }
 
 function abrirModalCardapio(id) {
@@ -995,18 +940,18 @@ function salvarCardapio() {
 
   persist();
   fecharModal('modal-cardapio');
-  renderCardapio();
+  renderProdutos();
 }
 
 function excluirCardapio(id) {
   const item = state.cardapio.find(i => i.id === id);
   if (!item) return;
-  if (!confirm(`Excluir "${itemLabel(item)}" do cardápio? Esta ação não pode ser desfeita.`)) return;
+  if (!confirm(`Excluir "${itemLabel(item)}"? Esta ação não pode ser desfeita.`)) return;
   state.cardapio = state.cardapio.filter(i => i.id !== id);
   delete state.estoque[id];
   persist();
   toast('Item excluído.', '');
-  renderCardapio();
+  renderProdutos();
 }
 
 // ===================== HISTÓRICO =====================
