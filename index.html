@@ -327,6 +327,9 @@
     .split-row { display: grid; grid-template-columns: 1fr 110px; gap: 0.5rem; align-items: center; }
     .split-check-label { display: flex; align-items: center; gap: 0.4rem; font-size: 0.78rem; font-weight: 600; color: var(--gray-700); cursor: pointer; margin-bottom: 0; }
     .split-check-label input[type="checkbox"] { width: auto; cursor: pointer; accent-color: var(--red); }
+    /* CAIXA SCREEN */
+    #caixa-screen { position: fixed; inset: 0; z-index: 9998; background: var(--black); display: none; align-items: center; justify-content: center; padding: 1rem; }
+    #turno-info { font-size: 0.75rem; color: rgba(255,255,255,0.6); border-left: 1px solid rgba(255,255,255,0.2); padding-left: 0.75rem; margin-left: 0.1rem; white-space: nowrap; }
     /* RESPONSIVE */
     @media (max-width: 600px) {
       .kpi-grid { grid-template-columns: 1fr 1fr; }
@@ -362,11 +365,31 @@
   </div>
 </div>
 
+<!-- CAIXA -->
+<div id="caixa-screen">
+  <div class="login-card">
+    <i class="ti ti-cash-register login-logo"></i>
+    <div class="login-title">Abertura de Caixa</div>
+    <div class="login-subtitle" id="caixa-operador-nome"></div>
+    <div class="form-group" style="text-align:left;margin-top:0.5rem">
+      <label>Troco inicial em caixa (R$)</label>
+      <input type="number" id="caixa-troco" step="0.01" min="0" value="0" placeholder="0,00">
+    </div>
+    <button class="btn btn-primary" style="width:100%;justify-content:center;padding:0.75rem;margin-top:0.75rem" onclick="confirmarAberturaCaixa()">
+      <i class="ti ti-check"></i> Abrir Caixa
+    </button>
+  </div>
+</div>
+
 <header>
   <i class="ti ti-pizza logo-icon"></i>
   <h1>Pizza dos Cria</h1>
   <div class="header-right">
     <span class="header-user" id="header-user"></span>
+    <span id="turno-info" style="display:none"></span>
+    <button class="btn btn-sm btn-ghost" id="btn-fechar-caixa" style="display:none" onclick="abrirModalFecharCaixa()">
+      <i class="ti ti-lock"></i> <span class="nav-label">Fechar Caixa</span>
+    </button>
     <button class="btn btn-sm btn-ghost" onclick="logout()">
       <i class="ti ti-logout"></i> <span class="nav-label">Sair</span>
     </button>
@@ -390,6 +413,10 @@
     <i class="ti ti-history"></i>
     <span class="nav-label">Histórico</span>
   </button>
+  <button data-tab="configuracoes" data-perfil="dono">
+    <i class="ti ti-settings"></i>
+    <span class="nav-label">Configurações</span>
+  </button>
 </nav>
 
 <main>
@@ -403,6 +430,7 @@
       </div>
       <div id="vendas-hoje-table"></div>
     </div>
+    <div id="caixas-dia-wrap" style="margin-top:1.25rem"></div>
   </div>
 
   <!-- VENDER -->
@@ -493,6 +521,11 @@
     </div>
     <div class="table-wrap" id="historico-wrap"></div>
   </div>
+
+  <!-- CONFIGURAÇÕES -->
+  <div id="tab-configuracoes" class="tab-content">
+    <div id="config-content"></div>
+  </div>
 </main>
 
 <!-- MODAL ENTRADA -->
@@ -549,34 +582,81 @@
   </div>
 </div>
 
+<!-- MODAL FECHAR CAIXA -->
+<div class="modal-overlay" id="modal-fechar-caixa" style="display:none">
+  <div class="modal">
+    <h3><i class="ti ti-lock"></i> Fechar Caixa</h3>
+    <div id="fechar-caixa-resumo" style="margin-bottom:1rem;font-size:0.875rem;color:var(--gray-700);background:var(--gray-50);border-radius:var(--radius);padding:0.75rem"></div>
+    <div class="form-group">
+      <label>Dinheiro em caixa no fechamento (R$)</label>
+      <input type="number" id="fechar-troco" step="0.01" min="0" placeholder="0,00">
+    </div>
+    <div class="form-group">
+      <label>Observações (opcional)</label>
+      <input type="text" id="fechar-obs" placeholder="Ex: sem troco, transferência realizada...">
+    </div>
+    <div class="modal-actions">
+      <button class="btn btn-secondary" onclick="fecharModal('modal-fechar-caixa')">Cancelar</button>
+      <button class="btn btn-danger" onclick="confirmarFechamento()"><i class="ti ti-check"></i> Confirmar Fechamento</button>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL FUNCIONÁRIO -->
+<div class="modal-overlay" id="modal-funcionario" style="display:none">
+  <div class="modal">
+    <h3><i class="ti ti-user-plus"></i> <span id="modal-func-title">Novo Funcionário</span></h3>
+    <div class="form-group">
+      <label>Nome</label>
+      <input type="text" id="func-nome" placeholder="Nome completo">
+    </div>
+    <div class="form-group">
+      <label>Usuário</label>
+      <input type="text" id="func-usuario" placeholder="usuário para login" autocomplete="off">
+    </div>
+    <div class="form-group">
+      <label>Senha</label>
+      <input type="password" id="func-senha" placeholder="senha" autocomplete="new-password">
+    </div>
+    <input type="hidden" id="func-edit-id">
+    <div class="modal-actions">
+      <button class="btn btn-secondary" onclick="fecharModal('modal-funcionario')">Cancelar</button>
+      <button class="btn btn-primary" onclick="salvarFuncionario()"><i class="ti ti-check"></i> Salvar</button>
+    </div>
+  </div>
+</div>
+
 <div id="toast-container"></div>
 
 <script>
 // ===================== STATE =====================
-const KEYS = { cardapio: 'pz_cardapio', estoque: 'pz_estoque', hist: 'pz_hist', usuarios: 'pz_usuarios' };
-const ESTOQUE_BAIXO = 2;
+const KEYS = { cardapio: 'pz_cardapio', estoque: 'pz_estoque', hist: 'pz_hist', usuarios: 'pz_usuarios', caixas: 'pz_caixas', config: 'pz_config' };
 
 let state = { cardapio: [], estoque: {}, hist: [] };
 let currentUser = null;
+let caixaAtivo = null;
+let config = { extraAssada: 2, estoqueMinGlobal: 5 };
 let currentTab = 'dashboard';
 let tipoVenda = 'Congelada';
 let histFilter = 'todos';
 
 // ===================== INIT =====================
 function init() {
-  // Garantir usuário dono padrão
   let users = load(KEYS.usuarios) || [];
   if (!users.some(u => u.perfil === 'dono')) {
     users.unshift({ id: 1, nome: 'Dono', usuario: 'dono', senha: '1234', perfil: 'dono' });
     localStorage.setItem(KEYS.usuarios, JSON.stringify(users));
   }
 
+  const savedConfig = load(KEYS.config);
+  if (savedConfig) config = { ...config, ...savedConfig };
+
   const defaultCardapio = [
-    { id: uid(), sabor: 'Calabresa', tamanho: 'Média', custo: 10, precoCongelada: 15, precoAssada: 17 },
-    { id: uid(), sabor: 'Mussarela', tamanho: 'Média', custo: 10, precoCongelada: 15, precoAssada: 17 },
-    { id: uid(), sabor: 'Frango c/ Catupiry', tamanho: 'Média', custo: 12, precoCongelada: 18, precoAssada: 20 },
-    { id: uid(), sabor: 'Calabresa', tamanho: 'Grande', custo: 16, precoCongelada: 24, precoAssada: 27 },
-    { id: uid(), sabor: 'Mussarela', tamanho: 'Grande', custo: 16, precoCongelada: 24, precoAssada: 27 },
+    { id: uid(), sabor: 'Calabresa', tamanho: 'Média', custo: 10, precoCongelada: 15, precoAssada: 17, estoqueMin: 5 },
+    { id: uid(), sabor: 'Mussarela', tamanho: 'Média', custo: 10, precoCongelada: 15, precoAssada: 17, estoqueMin: 5 },
+    { id: uid(), sabor: 'Frango c/ Catupiry', tamanho: 'Média', custo: 12, precoCongelada: 18, precoAssada: 20, estoqueMin: 5 },
+    { id: uid(), sabor: 'Calabresa', tamanho: 'Grande', custo: 16, precoCongelada: 24, precoAssada: 27, estoqueMin: 5 },
+    { id: uid(), sabor: 'Mussarela', tamanho: 'Grande', custo: 16, precoCongelada: 24, precoAssada: 27, estoqueMin: 5 },
   ];
 
   state.cardapio = load(KEYS.cardapio) || defaultCardapio;
@@ -585,6 +665,7 @@ function init() {
 
   state.cardapio.forEach(item => {
     if (state.estoque[item.id] === undefined) state.estoque[item.id] = 10;
+    if (item.estoqueMin === undefined) item.estoqueMin = config.estoqueMinGlobal;
   });
 
   persist();
@@ -593,7 +674,6 @@ function init() {
   bindHistFilters();
   bindModalClose();
 
-  // Enter nos campos de login
   document.getElementById('login-usuario').addEventListener('keydown', e => {
     if (e.key === 'Enter') document.getElementById('login-senha').focus();
   });
@@ -601,14 +681,12 @@ function init() {
     if (e.key === 'Enter') doLogin();
   });
 
-  // Restaurar sessão anterior (mesma aba/janela)
   const session = sessionStorage.getItem('pz_session');
   if (session) {
     const userId = JSON.parse(session).id;
     const user = (load(KEYS.usuarios) || []).find(u => u.id === userId);
     if (user) { loginUser(user); return; }
   }
-  // Sem sessão: mostrar login (já está visível por padrão)
 }
 
 // ===================== AUTH =====================
@@ -629,21 +707,50 @@ function loginUser(user) {
   document.getElementById('login-screen').style.display = 'none';
   document.getElementById('header-user').textContent = user.nome;
   setupNavForProfile();
-  const startTab = user.perfil === 'dono' ? 'dashboard' : 'vender';
+
+  if (user.perfil === 'funcionario') {
+    const caixas = load(KEYS.caixas) || [];
+    const hoje = new Date().toDateString();
+    const aberto = caixas.find(c => !c.fechamento && c.operadorId === user.id && new Date(c.abertura.timestamp).toDateString() === hoje);
+    if (aberto) {
+      caixaAtivo = aberto;
+      updateTurnoInfo();
+      showApp('vender');
+    } else {
+      document.getElementById('caixa-operador-nome').textContent = 'Olá, ' + user.nome + '!';
+      document.getElementById('caixa-troco').value = '0';
+      document.getElementById('caixa-screen').style.display = 'flex';
+    }
+  } else {
+    const caixas = load(KEYS.caixas) || [];
+    const hoje = new Date().toDateString();
+    const aberto = caixas.find(c => !c.fechamento && new Date(c.abertura.timestamp).toDateString() === hoje);
+    caixaAtivo = aberto || null;
+    if (caixaAtivo) updateTurnoInfo();
+    showApp('dashboard');
+  }
+}
+
+function showApp(startTab) {
   document.querySelectorAll('#nav button').forEach(b => b.classList.remove('active'));
   const activeBtn = document.querySelector(`#nav button[data-tab="${startTab}"]`);
   if (activeBtn) activeBtn.classList.add('active');
   document.querySelectorAll('.tab-content').forEach(t => t.classList.remove('active'));
   document.getElementById('tab-' + startTab).classList.add('active');
+  currentTab = startTab;
   renderTab(startTab);
 }
 
 function logout() {
   sessionStorage.removeItem('pz_session');
   currentUser = null;
+  caixaAtivo = null;
   document.getElementById('login-usuario').value = '';
   document.getElementById('login-senha').value = '';
   document.getElementById('login-error').textContent = '';
+  document.getElementById('caixa-screen').style.display = 'none';
+  document.getElementById('turno-info').style.display = 'none';
+  document.getElementById('btn-fechar-caixa').style.display = 'none';
   document.querySelectorAll('#nav button').forEach(b => b.classList.remove('active'));
   document.querySelectorAll('.tab-content').forEach(t => t.classList.remove('active'));
   document.getElementById('login-screen').style.display = 'flex';
@@ -669,6 +776,14 @@ function persist() {
   localStorage.setItem(KEYS.cardapio, JSON.stringify(state.cardapio));
   localStorage.setItem(KEYS.estoque, JSON.stringify(state.estoque));
   localStorage.setItem(KEYS.hist, JSON.stringify(state.hist));
+}
+
+function persistConfig() {
+  localStorage.setItem(KEYS.config, JSON.stringify(config));
+}
+
+function persistCaixas(caixas) {
+  localStorage.setItem(KEYS.caixas, JSON.stringify(caixas));
 }
 
 function brl(n) {
@@ -700,6 +815,78 @@ function toast(msg, type) {
   setTimeout(() => el.remove(), 3500);
 }
 
+// ===================== CAIXA =====================
+function confirmarAberturaCaixa() {
+  const trocoInicial = parseFloat(document.getElementById('caixa-troco').value) || 0;
+  const novoCaixa = {
+    id: uid(),
+    operadorId: currentUser.id,
+    operadorNome: currentUser.nome,
+    abertura: { timestamp: Date.now(), trocoInicial },
+    fechamento: null,
+    vendaIds: [],
+  };
+  const caixas = load(KEYS.caixas) || [];
+  caixas.push(novoCaixa);
+  persistCaixas(caixas);
+  caixaAtivo = novoCaixa;
+  updateTurnoInfo();
+  document.getElementById('caixa-screen').style.display = 'none';
+  showApp('vender');
+}
+
+function updateTurnoInfo() {
+  if (!caixaAtivo) {
+    document.getElementById('turno-info').style.display = 'none';
+    document.getElementById('btn-fechar-caixa').style.display = 'none';
+    return;
+  }
+  const horaAbertura = fmtTime(caixaAtivo.abertura.timestamp);
+  document.getElementById('turno-info').textContent = 'Caixa desde ' + horaAbertura;
+  document.getElementById('turno-info').style.display = '';
+  if (currentUser && currentUser.perfil === 'funcionario') {
+    document.getElementById('btn-fechar-caixa').style.display = '';
+  }
+}
+
+function abrirModalFecharCaixa() {
+  if (!caixaAtivo) return;
+  const caixas = load(KEYS.caixas) || [];
+  const caixa = caixas.find(c => c.id === caixaAtivo.id) || caixaAtivo;
+  const vendasDoCaixa = state.hist.filter(h => h.tipo === 'venda' && (caixa.vendaIds || []).includes(h.id));
+  const totalVendas = vendasDoCaixa.reduce((a, h) => a + h.total, 0);
+  const totalLucro = vendasDoCaixa.reduce((a, h) => a + h.lucro, 0);
+  const qtdPizzas = vendasDoCaixa.reduce((a, h) => a + h.qtd, 0);
+  document.getElementById('fechar-caixa-resumo').innerHTML =
+    `<strong>${caixa.operadorNome}</strong> — aberto às ${fmtTime(caixa.abertura.timestamp)}<br>` +
+    `Troco inicial: <strong>${brl(caixa.abertura.trocoInicial)}</strong><br>` +
+    `Pizzas vendidas: <strong>${qtdPizzas}</strong> &nbsp;|&nbsp; ` +
+    `Total: <strong>${brl(totalVendas)}</strong> &nbsp;|&nbsp; ` +
+    `Lucro: <strong style="color:var(--green-dark)">${brl(totalLucro)}</strong>`;
+  document.getElementById('fechar-troco').value = '';
+  document.getElementById('fechar-obs').value = '';
+  document.getElementById('modal-fechar-caixa').style.display = 'flex';
+}
+
+function confirmarFechamento() {
+  if (!caixaAtivo) return;
+  const trocoFinal = parseFloat(document.getElementById('fechar-troco').value);
+  if (isNaN(trocoFinal) || trocoFinal < 0) return toast('Informe o valor em caixa.', 'error');
+  const obs = document.getElementById('fechar-obs').value.trim();
+  const caixas = load(KEYS.caixas) || [];
+  const idx = caixas.findIndex(c => c.id === caixaAtivo.id);
+  if (idx >= 0) {
+    caixas[idx].fechamento = { timestamp: Date.now(), trocoFinal, obs };
+    persistCaixas(caixas);
+  }
+  fecharModal('modal-fechar-caixa');
+  toast('Caixa fechado com sucesso!', 'success');
+  caixaAtivo = null;
+  document.getElementById('turno-info').style.display = 'none';
+  document.getElementById('btn-fechar-caixa').style.display = 'none';
+  logout();
+}
+
 // ===================== NAV =====================
 function bindNav() {
   document.getElementById('nav').addEventListener('click', e => {
@@ -719,6 +906,7 @@ function renderTab(tab) {
   else if (tab === 'vender') renderVender();
   else if (tab === 'produtos') renderProdutos();
   else if (tab === 'historico') renderHistorico();
+  else if (tab === 'configuracoes') renderConfiguracoes();
 }
 
 // ===================== DASHBOARD =====================
@@ -752,8 +940,8 @@ function renderDashboard() {
     </div>
   `;
 
-  // Alertas de estoque baixo
-  const baixos = state.cardapio.filter(item => (state.estoque[item.id] || 0) <= ESTOQUE_BAIXO);
+  // Alertas de estoque mínimo por item
+  const baixos = state.cardapio.filter(item => (state.estoque[item.id] || 0) <= (item.estoqueMin || config.estoqueMinGlobal));
   const alertsEl = document.getElementById('alerts-container');
   alertsEl.innerHTML = '';
   if (baixos.length > 0) {
@@ -785,6 +973,45 @@ function renderDashboard() {
         </tr>`).join('')}
         </tbody>
       </table>`;
+
+  // Caixas do dia
+  const caixasWrap = document.getElementById('caixas-dia-wrap');
+  const caixas = load(KEYS.caixas) || [];
+  const hoje = new Date().toDateString();
+  const caixasHoje = caixas.filter(c => new Date(c.abertura.timestamp).toDateString() === hoje);
+  if (caixasHoje.length === 0) { caixasWrap.innerHTML = ''; return; }
+
+  caixasWrap.innerHTML = `
+    <div class="table-wrap">
+      <div class="table-header">
+        <h2><i class="ti ti-cash-register"></i> Caixas de Hoje</h2>
+      </div>
+      <table>
+        <thead><tr>
+          <th>Operador</th><th>Abertura</th><th>Fechamento</th><th>Pizzas</th><th>Total Vendas</th><th>Lucro</th><th>Troco Final</th>
+        </tr></thead>
+        <tbody>${caixasHoje.map(c => {
+          const vendasC = state.hist.filter(h => h.tipo === 'venda' && (c.vendaIds || []).includes(h.id));
+          const tv = vendasC.reduce((a, h) => a + h.total, 0);
+          const tl = vendasC.reduce((a, h) => a + h.lucro, 0);
+          const tp = vendasC.reduce((a, h) => a + h.qtd, 0);
+          const status = c.fechamento
+            ? `<span class="badge badge-gray">Fechado ${fmtTime(c.fechamento.timestamp)}</span>`
+            : `<span class="badge badge-green">Aberto</span>`;
+          const trocoFinal = c.fechamento ? brl(c.fechamento.trocoFinal) : '—';
+          return `<tr>
+            <td><strong>${c.operadorNome}</strong></td>
+            <td>${fmtTime(c.abertura.timestamp)}<br><small style="color:var(--gray-500)">${brl(c.abertura.trocoInicial)} inicial</small></td>
+            <td>${status}</td>
+            <td>${tp}</td>
+            <td><strong>${brl(tv)}</strong></td>
+            <td style="color:var(--green-dark);font-weight:600">${brl(tl)}</td>
+            <td>${trocoFinal}</td>
+          </tr>`;
+        }).join('')}
+        </tbody>
+      </table>
+    </div>`;
 }
 
 // ===================== VENDER =====================
@@ -913,8 +1140,9 @@ function confirmarVenda() {
 
   state.estoque[itemId] = (state.estoque[itemId] || 0) - qty;
 
+  const vendaId = uid();
   state.hist.push({
-    id: uid(),
+    id: vendaId,
     tipo: 'venda',
     timestamp: Date.now(),
     itemId,
@@ -927,6 +1155,16 @@ function confirmarVenda() {
     total,
     lucro,
   });
+
+  if (caixaAtivo) {
+    const caixas = load(KEYS.caixas) || [];
+    const idx = caixas.findIndex(c => c.id === caixaAtivo.id);
+    if (idx >= 0) {
+      caixas[idx].vendaIds = [...(caixas[idx].vendaIds || []), vendaId];
+      caixaAtivo = caixas[idx];
+      persistCaixas(caixas);
+    }
+  }
 
   persist();
   toast(`Venda registrada! ${qty}x ${itemLabel(item)} — ${brl(total)}`, 'success');
@@ -948,13 +1186,14 @@ function renderProdutos() {
   document.getElementById('produtos-wrap').innerHTML = `
     <table>
       <thead><tr>
-        <th>Sabor</th><th>Tamanho</th><th class="hide-mobile">Custo</th><th>Congelada</th><th>Assada</th><th>Estoque</th><th>Status</th><th>Ações</th>
+        <th>Sabor</th><th>Tamanho</th><th class="hide-mobile">Custo</th><th>Congelada</th><th>Assada</th><th>Estoque</th><th>Mín.</th><th>Status</th><th>Ações</th>
       </tr></thead>
       <tbody>${state.cardapio.map(item => {
         const qty = state.estoque[item.id] || 0;
+        const min = item.estoqueMin !== undefined ? item.estoqueMin : config.estoqueMinGlobal;
         let status, badgeClass;
         if (qty === 0) { status = 'Sem estoque'; badgeClass = 'badge-red'; }
-        else if (qty <= ESTOQUE_BAIXO) { status = 'Baixo'; badgeClass = 'badge-yellow'; }
+        else if (qty <= min) { status = 'Baixo'; badgeClass = 'badge-yellow'; }
         else { status = 'OK'; badgeClass = 'badge-green'; }
         return `<tr>
           <td><strong>${item.sabor}</strong></td>
@@ -963,6 +1202,7 @@ function renderProdutos() {
           <td>${brl(item.precoCongelada)}</td>
           <td>${brl(item.precoAssada)}</td>
           <td><strong>${qty}</strong> <span style="color:var(--gray-500);font-size:0.8rem">un.</span></td>
+          <td><input type="number" min="0" value="${min}" style="width:60px;padding:0.25rem 0.4rem;font-size:0.8rem;border:1.5px solid var(--gray-300);border-radius:4px" onchange="salvarEstoqueMin('${item.id}', this.value)"></td>
           <td><span class="badge ${badgeClass}">${status}</span></td>
           <td style="white-space:nowrap">
             <button class="btn btn-success btn-sm" onclick="abrirModalEntrada('${item.id}')">
@@ -1067,6 +1307,15 @@ function excluirCardapio(id) {
   renderProdutos();
 }
 
+function salvarEstoqueMin(id, value) {
+  const min = parseInt(value);
+  if (isNaN(min) || min < 0) return;
+  const item = state.cardapio.find(i => i.id === id);
+  if (!item) return;
+  item.estoqueMin = min;
+  persist();
+}
+
 // ===================== HISTÓRICO =====================
 function bindHistFilters() {
   document.getElementById('hist-filters').addEventListener('click', e => {
@@ -1111,6 +1360,139 @@ function renderHistorico() {
       </tr>`).join('')}
       </tbody>
     </table>`;
+}
+
+// ===================== CONFIGURAÇÕES =====================
+function renderConfiguracoes() {
+  const users = load(KEYS.usuarios) || [];
+  const funcionarios = users.filter(u => u.perfil === 'funcionario');
+  document.getElementById('config-content').innerHTML = `
+    <div style="display:grid;gap:1.25rem;max-width:680px">
+      <div class="card">
+        <h2 style="font-size:0.95rem;font-weight:700;margin-bottom:1.25rem;display:flex;align-items:center;gap:0.5rem"><i class="ti ti-sliders"></i> Configurações Gerais</h2>
+        <div class="form-group">
+          <label>Acréscimo pizzas assadas (R$)</label>
+          <input type="number" id="cfg-extra-assada" step="0.50" min="0" value="${config.extraAssada}" style="max-width:150px">
+        </div>
+        <div class="form-group">
+          <label>Estoque mínimo padrão (unidades)</label>
+          <input type="number" id="cfg-estoque-min" min="0" value="${config.estoqueMinGlobal}" style="max-width:150px">
+        </div>
+        <button class="btn btn-primary" onclick="salvarConfig()"><i class="ti ti-check"></i> Salvar Configurações</button>
+      </div>
+      <div class="card">
+        <h2 style="font-size:0.95rem;font-weight:700;margin-bottom:1.25rem;display:flex;align-items:center;gap:0.5rem"><i class="ti ti-key"></i> Alterar Senha do Dono</h2>
+        <div class="form-group">
+          <label>Nova senha</label>
+          <input type="password" id="cfg-nova-senha" placeholder="nova senha" autocomplete="new-password" style="max-width:250px">
+        </div>
+        <div class="form-group">
+          <label>Confirmar senha</label>
+          <input type="password" id="cfg-conf-senha" placeholder="confirme a senha" autocomplete="new-password" style="max-width:250px">
+        </div>
+        <button class="btn btn-primary" onclick="salvarSenha()"><i class="ti ti-check"></i> Alterar Senha</button>
+      </div>
+      <div class="card">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:1rem">
+          <h2 style="font-size:0.95rem;font-weight:700;display:flex;align-items:center;gap:0.5rem;margin:0"><i class="ti ti-users"></i> Funcionários</h2>
+          <button class="btn btn-primary btn-sm" onclick="abrirModalFuncionario(null)"><i class="ti ti-plus"></i> Novo</button>
+        </div>
+        ${funcionarios.length === 0
+          ? `<p style="color:var(--gray-500);font-size:0.875rem">Nenhum funcionário cadastrado.</p>`
+          : `<table style="width:100%;border-collapse:collapse">
+              <thead><tr>
+                <th style="text-align:left;padding:0.5rem 0.5rem;font-size:0.72rem;text-transform:uppercase;letter-spacing:0.5px;color:var(--gray-600);border-bottom:1px solid var(--gray-200)">Nome</th>
+                <th style="text-align:left;padding:0.5rem 0.5rem;font-size:0.72rem;text-transform:uppercase;letter-spacing:0.5px;color:var(--gray-600);border-bottom:1px solid var(--gray-200)">Usuário</th>
+                <th style="padding:0.5rem 0.5rem;border-bottom:1px solid var(--gray-200)"></th>
+              </tr></thead>
+              <tbody>${funcionarios.map(f => `<tr>
+                <td style="padding:0.6rem 0.5rem;font-size:0.875rem;border-bottom:1px solid var(--gray-200)"><strong>${f.nome}</strong></td>
+                <td style="padding:0.6rem 0.5rem;font-size:0.875rem;color:var(--gray-600);border-bottom:1px solid var(--gray-200)">${f.usuario}</td>
+                <td style="padding:0.6rem 0.5rem;border-bottom:1px solid var(--gray-200);white-space:nowrap">
+                  <button class="btn btn-secondary btn-sm" onclick="abrirModalFuncionario('${f.id}')"><i class="ti ti-edit"></i></button>
+                  <button class="btn btn-danger btn-sm" style="margin-left:0.3rem" onclick="excluirFuncionario('${f.id}')"><i class="ti ti-trash"></i></button>
+                </td>
+              </tr>`).join('')}
+              </tbody>
+            </table>`}
+      </div>
+    </div>`;
+}
+
+function salvarConfig() {
+  const extra = parseFloat(document.getElementById('cfg-extra-assada').value);
+  const min = parseInt(document.getElementById('cfg-estoque-min').value);
+  if (isNaN(extra) || extra < 0) return toast('Valor inválido para acréscimo assada.', 'error');
+  if (isNaN(min) || min < 0) return toast('Valor inválido para estoque mínimo.', 'error');
+  config.extraAssada = extra;
+  config.estoqueMinGlobal = min;
+  persistConfig();
+  toast('Configurações salvas!', 'success');
+}
+
+function salvarSenha() {
+  const nova = document.getElementById('cfg-nova-senha').value;
+  const conf = document.getElementById('cfg-conf-senha').value;
+  if (!nova || nova.length < 3) return toast('Senha deve ter pelo menos 3 caracteres.', 'error');
+  if (nova !== conf) return toast('As senhas não conferem.', 'error');
+  const users = load(KEYS.usuarios) || [];
+  const idx = users.findIndex(u => u.id === currentUser.id);
+  if (idx < 0) return;
+  users[idx].senha = nova;
+  localStorage.setItem(KEYS.usuarios, JSON.stringify(users));
+  document.getElementById('cfg-nova-senha').value = '';
+  document.getElementById('cfg-conf-senha').value = '';
+  toast('Senha alterada com sucesso!', 'success');
+}
+
+function abrirModalFuncionario(id) {
+  const users = load(KEYS.usuarios) || [];
+  const func = id ? users.find(u => u.id === id) : null;
+  document.getElementById('modal-func-title').textContent = func ? 'Editar Funcionário' : 'Novo Funcionário';
+  document.getElementById('func-nome').value = func ? func.nome : '';
+  document.getElementById('func-usuario').value = func ? func.usuario : '';
+  document.getElementById('func-senha').value = '';
+  document.getElementById('func-edit-id').value = id || '';
+  document.getElementById('modal-funcionario').style.display = 'flex';
+  document.getElementById('func-nome').focus();
+}
+
+function salvarFuncionario() {
+  const nome = document.getElementById('func-nome').value.trim();
+  const usuario = document.getElementById('func-usuario').value.trim().toLowerCase();
+  const senha = document.getElementById('func-senha').value;
+  const editId = document.getElementById('func-edit-id').value;
+  if (!nome) return toast('Informe o nome.', 'error');
+  if (!usuario) return toast('Informe o usuário.', 'error');
+  const users = load(KEYS.usuarios) || [];
+  const duplicate = users.find(u => u.usuario === usuario && String(u.id) !== String(editId));
+  if (duplicate) return toast('Usuário já existe.', 'error');
+  if (editId) {
+    const idx = users.findIndex(u => String(u.id) === String(editId));
+    if (idx >= 0) {
+      users[idx].nome = nome;
+      users[idx].usuario = usuario;
+      if (senha) users[idx].senha = senha;
+    }
+    toast('Funcionário atualizado!', 'success');
+  } else {
+    if (!senha || senha.length < 3) return toast('Informe uma senha de pelo menos 3 caracteres.', 'error');
+    users.push({ id: uid(), nome, usuario, senha, perfil: 'funcionario' });
+    toast('Funcionário cadastrado!', 'success');
+  }
+  localStorage.setItem(KEYS.usuarios, JSON.stringify(users));
+  fecharModal('modal-funcionario');
+  renderConfiguracoes();
+}
+
+function excluirFuncionario(id) {
+  const users = load(KEYS.usuarios) || [];
+  const func = users.find(u => String(u.id) === String(id));
+  if (!func) return;
+  if (!confirm(`Excluir funcionário "${func.nome}"?`)) return;
+  localStorage.setItem(KEYS.usuarios, JSON.stringify(users.filter(u => String(u.id) !== String(id))));
+  toast('Funcionário excluído.', '');
+  renderConfiguracoes();
 }
 
 // ===================== MODALS =====================
