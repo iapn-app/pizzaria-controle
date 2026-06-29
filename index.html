@@ -3,14 +3,15 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Pizzaria Controle</title>
+  <title>Pizza dos Cria</title>
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@latest/tabler-icons.min.css">
   <style>
     :root {
-      --red: #c0392b;
-      --red-dark: #922b21;
-      --red-light: #e74c3c;
-      --red-bg: #fdf2f2;
+      --red: #CC0000;
+      --red-dark: #aa0000;
+      --red-light: #e63333;
+      --red-bg: #fff0f0;
+      --black: #1A1A1A;
       --white: #ffffff;
       --gray-50: #f8f9fa;
       --gray-100: #f1f3f5;
@@ -36,7 +37,7 @@
     }
     /* HEADER */
     header {
-      background: var(--red);
+      background: var(--black);
       color: white;
       padding: 0 1.5rem;
       height: 56px;
@@ -49,7 +50,24 @@
       z-index: 100;
     }
     header h1 { font-size: 1.05rem; font-weight: 700; letter-spacing: 0.3px; }
-    header .logo-icon { font-size: 1.4rem; }
+    header .logo-icon { font-size: 1.4rem; color: var(--red); }
+    .header-right { margin-left: auto; display: flex; align-items: center; gap: 0.75rem; }
+    .header-user { font-size: 0.8rem; color: rgba(255,255,255,0.7); white-space: nowrap; }
+    .btn-ghost { background: rgba(255,255,255,0.12); color: white; }
+    .btn-ghost:hover { background: rgba(255,255,255,0.22); }
+    .badge-orange { background: #ffe8cc; color: #874d00; }
+    /* LOGIN */
+    #login-screen { position: fixed; inset: 0; z-index: 9999; background: var(--black); display: flex; align-items: center; justify-content: center; padding: 1rem; }
+    .login-card { background: #242424; border-radius: 14px; padding: 2.5rem 2rem; width: 100%; max-width: 360px; text-align: center; box-shadow: 0 8px 40px rgba(0,0,0,0.6); }
+    .login-logo { font-size: 3rem; display: block; margin-bottom: 0.5rem; color: var(--red); }
+    .login-title { color: #fff; font-size: 1.6rem; font-weight: 800; margin-bottom: 0.2rem; }
+    .login-subtitle { color: #777; font-size: 0.82rem; margin-bottom: 1.75rem; }
+    .login-card .form-group { text-align: left; }
+    .login-card label { color: #aaa; }
+    .login-card input { background: #333; border-color: #444; color: #fff; margin-bottom: 0; }
+    .login-card input::placeholder { color: #666; }
+    .login-card input:focus { border-color: var(--red); background: #3a3a3a; box-shadow: 0 0 0 3px rgba(204,0,0,0.2); }
+    .login-error { color: #ff6b6b; font-size: 0.83rem; margin-bottom: 0.75rem; min-height: 1.1rem; text-align: left; }
     /* NAV */
     nav {
       background: white;
@@ -323,13 +341,40 @@
 </head>
 <body>
 
+<!-- LOGIN -->
+<div id="login-screen">
+  <div class="login-card">
+    <i class="ti ti-pizza login-logo"></i>
+    <div class="login-title">Pizza dos Cria</div>
+    <div class="login-subtitle">Sistema de Controle</div>
+    <div class="form-group">
+      <label>Usuário</label>
+      <input type="text" id="login-usuario" placeholder="seu usuário" autocomplete="username">
+    </div>
+    <div class="form-group" style="margin-top:0.75rem">
+      <label>Senha</label>
+      <input type="password" id="login-senha" placeholder="sua senha" autocomplete="current-password">
+    </div>
+    <div class="login-error" id="login-error"></div>
+    <button class="btn btn-primary" style="width:100%;justify-content:center;padding:0.75rem;margin-top:0.25rem" onclick="doLogin()">
+      <i class="ti ti-login"></i> Entrar
+    </button>
+  </div>
+</div>
+
 <header>
   <i class="ti ti-pizza logo-icon"></i>
-  <h1>Pizzaria Controle</h1>
+  <h1>Pizza dos Cria</h1>
+  <div class="header-right">
+    <span class="header-user" id="header-user"></span>
+    <button class="btn btn-sm btn-ghost" onclick="logout()">
+      <i class="ti ti-logout"></i> <span class="nav-label">Sair</span>
+    </button>
+  </div>
 </header>
 
 <nav id="nav">
-  <button class="active" data-tab="dashboard">
+  <button class="active" data-tab="dashboard" data-perfil="dono">
     <i class="ti ti-layout-dashboard"></i>
     <span class="nav-label">Dashboard</span>
   </button>
@@ -337,11 +382,11 @@
     <i class="ti ti-shopping-cart"></i>
     <span class="nav-label">Vender</span>
   </button>
-  <button data-tab="produtos">
+  <button data-tab="produtos" data-perfil="dono">
     <i class="ti ti-pizza"></i>
     <span class="nav-label">Produtos &amp; Estoque</span>
   </button>
-  <button data-tab="historico">
+  <button data-tab="historico" data-perfil="dono">
     <i class="ti ti-history"></i>
     <span class="nav-label">Histórico</span>
   </button>
@@ -508,16 +553,24 @@
 
 <script>
 // ===================== STATE =====================
-const KEYS = { cardapio: 'pz_cardapio', estoque: 'pz_estoque', hist: 'pz_hist' };
+const KEYS = { cardapio: 'pz_cardapio', estoque: 'pz_estoque', hist: 'pz_hist', usuarios: 'pz_usuarios' };
 const ESTOQUE_BAIXO = 2;
 
 let state = { cardapio: [], estoque: {}, hist: [] };
+let currentUser = null;
 let currentTab = 'dashboard';
 let tipoVenda = 'Congelada';
 let histFilter = 'todos';
 
 // ===================== INIT =====================
 function init() {
+  // Garantir usuário dono padrão
+  let users = load(KEYS.usuarios) || [];
+  if (!users.some(u => u.perfil === 'dono')) {
+    users.unshift({ id: 1, nome: 'Dono', usuario: 'dono', senha: '1234', perfil: 'dono' });
+    localStorage.setItem(KEYS.usuarios, JSON.stringify(users));
+  }
+
   const defaultCardapio = [
     { id: uid(), sabor: 'Calabresa', tamanho: 'Média', custo: 10, precoCongelada: 15, precoAssada: 17 },
     { id: uid(), sabor: 'Mussarela', tamanho: 'Média', custo: 10, precoCongelada: 15, precoAssada: 17 },
@@ -530,7 +583,6 @@ function init() {
   state.estoque = load(KEYS.estoque) || {};
   state.hist = load(KEYS.hist) || [];
 
-  // Garantir estoque inicial para itens sem registro
   state.cardapio.forEach(item => {
     if (state.estoque[item.id] === undefined) state.estoque[item.id] = 10;
   });
@@ -540,7 +592,68 @@ function init() {
   bindSellListeners();
   bindHistFilters();
   bindModalClose();
-  renderTab('dashboard');
+
+  // Enter nos campos de login
+  document.getElementById('login-usuario').addEventListener('keydown', e => {
+    if (e.key === 'Enter') document.getElementById('login-senha').focus();
+  });
+  document.getElementById('login-senha').addEventListener('keydown', e => {
+    if (e.key === 'Enter') doLogin();
+  });
+
+  // Restaurar sessão anterior (mesma aba/janela)
+  const session = sessionStorage.getItem('pz_session');
+  if (session) {
+    const userId = JSON.parse(session).id;
+    const user = (load(KEYS.usuarios) || []).find(u => u.id === userId);
+    if (user) { loginUser(user); return; }
+  }
+  // Sem sessão: mostrar login (já está visível por padrão)
+}
+
+// ===================== AUTH =====================
+function doLogin() {
+  const usuario = document.getElementById('login-usuario').value.trim();
+  const senha = document.getElementById('login-senha').value;
+  const errEl = document.getElementById('login-error');
+  const users = load(KEYS.usuarios) || [];
+  const user = users.find(u => u.usuario === usuario && u.senha === senha);
+  if (!user) { errEl.textContent = 'Usuário ou senha incorretos.'; return; }
+  errEl.textContent = '';
+  loginUser(user);
+}
+
+function loginUser(user) {
+  currentUser = user;
+  sessionStorage.setItem('pz_session', JSON.stringify({ id: user.id }));
+  document.getElementById('login-screen').style.display = 'none';
+  document.getElementById('header-user').textContent = user.nome;
+  setupNavForProfile();
+  const startTab = user.perfil === 'dono' ? 'dashboard' : 'vender';
+  document.querySelectorAll('#nav button').forEach(b => b.classList.remove('active'));
+  const activeBtn = document.querySelector(`#nav button[data-tab="${startTab}"]`);
+  if (activeBtn) activeBtn.classList.add('active');
+  document.querySelectorAll('.tab-content').forEach(t => t.classList.remove('active'));
+  document.getElementById('tab-' + startTab).classList.add('active');
+  renderTab(startTab);
+}
+
+function logout() {
+  sessionStorage.removeItem('pz_session');
+  currentUser = null;
+  document.getElementById('login-usuario').value = '';
+  document.getElementById('login-senha').value = '';
+  document.getElementById('login-error').textContent = '';
+  document.querySelectorAll('#nav button').forEach(b => b.classList.remove('active'));
+  document.querySelectorAll('.tab-content').forEach(t => t.classList.remove('active'));
+  document.getElementById('login-screen').style.display = 'flex';
+}
+
+function setupNavForProfile() {
+  const isDono = currentUser && currentUser.perfil === 'dono';
+  document.querySelectorAll('#nav button[data-tab]').forEach(btn => {
+    btn.style.display = (btn.dataset.perfil === 'dono' && !isDono) ? 'none' : '';
+  });
 }
 
 // ===================== HELPERS =====================
