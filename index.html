@@ -1,0 +1,996 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Pizzaria Controle</title>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@latest/tabler-icons.min.css">
+  <style>
+    :root {
+      --red: #c0392b;
+      --red-dark: #922b21;
+      --red-light: #e74c3c;
+      --red-bg: #fdf2f2;
+      --white: #ffffff;
+      --gray-50: #f8f9fa;
+      --gray-100: #f1f3f5;
+      --gray-200: #e9ecef;
+      --gray-300: #dee2e6;
+      --gray-500: #adb5bd;
+      --gray-600: #868e96;
+      --gray-700: #495057;
+      --gray-900: #212529;
+      --green: #27ae60;
+      --green-dark: #1e8449;
+      --yellow: #f39c12;
+      --radius: 8px;
+      --shadow: 0 1px 3px rgba(0,0,0,0.08), 0 1px 2px rgba(0,0,0,0.06);
+      --shadow-md: 0 4px 16px rgba(0,0,0,0.12);
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      background: var(--gray-100);
+      color: var(--gray-900);
+      min-height: 100vh;
+    }
+    /* HEADER */
+    header {
+      background: var(--red);
+      color: white;
+      padding: 0 1.5rem;
+      height: 56px;
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.25);
+      position: sticky;
+      top: 0;
+      z-index: 100;
+    }
+    header h1 { font-size: 1.05rem; font-weight: 700; letter-spacing: 0.3px; }
+    header .logo-icon { font-size: 1.4rem; }
+    /* NAV */
+    nav {
+      background: white;
+      border-bottom: 2px solid var(--gray-200);
+      display: flex;
+      overflow-x: auto;
+      scrollbar-width: none;
+      position: sticky;
+      top: 56px;
+      z-index: 99;
+    }
+    nav::-webkit-scrollbar { display: none; }
+    nav button {
+      border: none;
+      background: none;
+      padding: 0.875rem 1.2rem;
+      cursor: pointer;
+      font-size: 0.84rem;
+      font-weight: 500;
+      color: var(--gray-600);
+      display: flex;
+      align-items: center;
+      gap: 0.4rem;
+      white-space: nowrap;
+      border-bottom: 3px solid transparent;
+      margin-bottom: -2px;
+      transition: color 0.15s, border-color 0.15s;
+    }
+    nav button:hover { color: var(--red); }
+    nav button.active { color: var(--red); border-bottom-color: var(--red); font-weight: 600; }
+    /* MAIN */
+    main { max-width: 1100px; margin: 0 auto; padding: 1.5rem 1rem; }
+    .tab-content { display: none; }
+    .tab-content.active { display: block; }
+    /* KPI GRID */
+    .kpi-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(175px, 1fr));
+      gap: 1rem;
+      margin-bottom: 1.25rem;
+    }
+    .card {
+      background: white;
+      border-radius: var(--radius);
+      padding: 1.25rem;
+      box-shadow: var(--shadow);
+    }
+    .kpi-card .icon { font-size: 1.3rem; color: var(--red); margin-bottom: 0.4rem; }
+    .kpi-card .label {
+      font-size: 0.72rem;
+      text-transform: uppercase;
+      letter-spacing: 0.8px;
+      color: var(--gray-600);
+      margin-bottom: 0.4rem;
+    }
+    .kpi-card .value { font-size: 1.75rem; font-weight: 700; }
+    /* ALERTS */
+    .alert {
+      background: #fff3cd;
+      border: 1px solid #ffc107;
+      border-radius: var(--radius);
+      padding: 0.875rem 1rem;
+      margin-bottom: 1rem;
+      display: flex;
+      align-items: flex-start;
+      gap: 0.6rem;
+      font-size: 0.88rem;
+    }
+    .alert.danger { background: #f8d7da; border-color: #f5c6cb; color: #721c24; }
+    .alert i { flex-shrink: 0; margin-top: 1px; }
+    /* TABLE WRAP */
+    .table-wrap {
+      background: white;
+      border-radius: var(--radius);
+      box-shadow: var(--shadow);
+      overflow: hidden;
+    }
+    .table-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 1rem 1.25rem;
+      border-bottom: 1px solid var(--gray-200);
+    }
+    .table-header h2 { font-size: 0.9rem; font-weight: 600; color: var(--gray-700); display: flex; align-items: center; gap: 0.4rem; }
+    table { width: 100%; border-collapse: collapse; }
+    th {
+      background: var(--gray-50);
+      padding: 0.7rem 1rem;
+      text-align: left;
+      font-size: 0.72rem;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      color: var(--gray-600);
+      font-weight: 600;
+      border-bottom: 1px solid var(--gray-200);
+    }
+    td { padding: 0.72rem 1rem; border-bottom: 1px solid var(--gray-200); font-size: 0.875rem; }
+    tr:last-child td { border-bottom: none; }
+    tbody tr:hover td { background: var(--gray-50); }
+    /* BADGES */
+    .badge {
+      display: inline-block;
+      padding: 0.2rem 0.55rem;
+      border-radius: 100px;
+      font-size: 0.72rem;
+      font-weight: 600;
+    }
+    .badge-green { background: #d4edda; color: #155724; }
+    .badge-yellow { background: #fff3cd; color: #856404; }
+    .badge-red { background: #f8d7da; color: #721c24; }
+    .badge-blue { background: #d1ecf1; color: #0c5460; }
+    .badge-gray { background: var(--gray-200); color: var(--gray-700); }
+    .badge-purple { background: #e2d9f3; color: #4a235a; }
+    /* FORMS */
+    .form-card {
+      background: white;
+      border-radius: var(--radius);
+      padding: 1.5rem;
+      box-shadow: var(--shadow);
+      max-width: 480px;
+    }
+    .form-card h2 { font-size: 0.95rem; font-weight: 700; margin-bottom: 1.25rem; display: flex; align-items: center; gap: 0.5rem; }
+    .form-group { margin-bottom: 1rem; }
+    label { display: block; font-size: 0.78rem; font-weight: 600; color: var(--gray-700); margin-bottom: 0.35rem; }
+    input, select {
+      width: 100%;
+      padding: 0.6rem 0.75rem;
+      border: 1.5px solid var(--gray-300);
+      border-radius: var(--radius);
+      font-size: 0.875rem;
+      color: var(--gray-900);
+      background: white;
+      transition: border-color 0.15s;
+      appearance: auto;
+    }
+    input:focus, select:focus { outline: none; border-color: var(--red); box-shadow: 0 0 0 3px rgba(192,57,43,0.1); }
+    /* TOGGLE */
+    .toggle-group { display: flex; gap: 0.5rem; }
+    .toggle-btn {
+      flex: 1;
+      padding: 0.6rem;
+      border: 1.5px solid var(--gray-300);
+      border-radius: var(--radius);
+      background: white;
+      cursor: pointer;
+      font-size: 0.84rem;
+      text-align: center;
+      transition: all 0.15s;
+      font-weight: 500;
+      color: var(--gray-700);
+    }
+    .toggle-btn.active { background: var(--red); border-color: var(--red); color: white; }
+    /* SUMMARY */
+    .summary-box {
+      background: var(--red-bg);
+      border: 1px solid #f1b8b8;
+      border-radius: var(--radius);
+      padding: 1rem;
+      margin: 1rem 0;
+    }
+    .summary-row { display: flex; justify-content: space-between; font-size: 0.875rem; padding: 0.2rem 0; color: var(--gray-700); }
+    .summary-row.total { font-weight: 700; font-size: 1rem; color: var(--gray-900); border-top: 1px solid #f1b8b8; margin-top: 0.5rem; padding-top: 0.5rem; }
+    .summary-row.profit { color: var(--green-dark); font-weight: 600; }
+    /* BUTTONS */
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.4rem;
+      padding: 0.6rem 1.2rem;
+      border-radius: var(--radius);
+      border: none;
+      font-size: 0.875rem;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.15s;
+      text-decoration: none;
+    }
+    .btn-primary { background: var(--red); color: white; }
+    .btn-primary:hover { background: var(--red-dark); }
+    .btn-primary:disabled { opacity: 0.45; cursor: not-allowed; }
+    .btn-secondary { background: var(--gray-100); color: var(--gray-700); }
+    .btn-secondary:hover { background: var(--gray-200); }
+    .btn-danger { background: #dc3545; color: white; }
+    .btn-danger:hover { background: #bd2130; }
+    .btn-success { background: var(--green); color: white; }
+    .btn-success:hover { background: var(--green-dark); }
+    .btn-sm { padding: 0.35rem 0.7rem; font-size: 0.78rem; }
+    /* STOCK BAR */
+    .stock-bar-wrap { background: var(--gray-200); border-radius: 100px; height: 8px; overflow: hidden; min-width: 100px; }
+    .stock-bar { height: 100%; border-radius: 100px; transition: width 0.4s ease; }
+    /* PAGE HEADER */
+    .page-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.25rem; flex-wrap: wrap; gap: 0.75rem; }
+    .section-title { font-size: 1.05rem; font-weight: 700; color: var(--gray-900); display: flex; align-items: center; gap: 0.5rem; }
+    /* EMPTY STATE */
+    .empty-state { text-align: center; padding: 3rem 1rem; color: var(--gray-500); }
+    .empty-state i { font-size: 2.5rem; margin-bottom: 0.75rem; display: block; }
+    .empty-state p { font-size: 0.9rem; }
+    /* MODAL */
+    .modal-overlay {
+      position: fixed;
+      inset: 0;
+      background: rgba(0,0,0,0.5);
+      z-index: 200;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 1rem;
+    }
+    .modal {
+      background: white;
+      border-radius: var(--radius);
+      padding: 1.5rem;
+      width: 100%;
+      max-width: 440px;
+      box-shadow: var(--shadow-md);
+      max-height: 90vh;
+      overflow-y: auto;
+    }
+    .modal h3 { font-size: 1rem; font-weight: 700; margin-bottom: 1.25rem; display: flex; align-items: center; gap: 0.5rem; }
+    .modal-actions { display: flex; gap: 0.75rem; justify-content: flex-end; margin-top: 1.25rem; }
+    /* FILTERS */
+    .filters { display: flex; gap: 0.5rem; margin-bottom: 1rem; flex-wrap: wrap; }
+    .filter-btn {
+      padding: 0.38rem 0.875rem;
+      border-radius: 100px;
+      border: 1.5px solid var(--gray-300);
+      background: white;
+      font-size: 0.8rem;
+      font-weight: 500;
+      cursor: pointer;
+      color: var(--gray-700);
+      transition: all 0.15s;
+    }
+    .filter-btn.active { background: var(--red); border-color: var(--red); color: white; }
+    /* TOAST */
+    #toast-container { position: fixed; bottom: 1.5rem; right: 1.5rem; z-index: 300; display: flex; flex-direction: column; gap: 0.5rem; pointer-events: none; }
+    .toast {
+      background: var(--gray-900);
+      color: white;
+      padding: 0.7rem 1.2rem;
+      border-radius: var(--radius);
+      font-size: 0.875rem;
+      box-shadow: var(--shadow-md);
+      animation: slideIn 0.2s ease;
+      pointer-events: auto;
+    }
+    .toast.success { background: var(--green-dark); }
+    .toast.error { background: #dc3545; }
+    @keyframes slideIn {
+      from { transform: translateX(80px); opacity: 0; }
+      to { transform: translateX(0); opacity: 1; }
+    }
+    /* SELL WARNING */
+    .sell-warning { color: #dc3545; font-size: 0.83rem; margin-bottom: 0.75rem; padding: 0.5rem 0.75rem; background: #f8d7da; border-radius: var(--radius); }
+    /* RESPONSIVE */
+    @media (max-width: 600px) {
+      .kpi-grid { grid-template-columns: 1fr 1fr; }
+      nav button .nav-label { display: none; }
+      main { padding: 1rem 0.75rem; }
+      .form-card { max-width: 100%; }
+    }
+    @media (max-width: 768px) {
+      .hide-mobile { display: none; }
+    }
+  </style>
+</head>
+<body>
+
+<header>
+  <i class="ti ti-pizza logo-icon"></i>
+  <h1>Pizzaria Controle</h1>
+</header>
+
+<nav id="nav">
+  <button class="active" data-tab="dashboard">
+    <i class="ti ti-layout-dashboard"></i>
+    <span class="nav-label">Dashboard</span>
+  </button>
+  <button data-tab="vender">
+    <i class="ti ti-shopping-cart"></i>
+    <span class="nav-label">Vender</span>
+  </button>
+  <button data-tab="estoque">
+    <i class="ti ti-box"></i>
+    <span class="nav-label">Estoque</span>
+  </button>
+  <button data-tab="cardapio">
+    <i class="ti ti-list"></i>
+    <span class="nav-label">Cardápio</span>
+  </button>
+  <button data-tab="historico">
+    <i class="ti ti-history"></i>
+    <span class="nav-label">Histórico</span>
+  </button>
+</nav>
+
+<main>
+  <!-- DASHBOARD -->
+  <div id="tab-dashboard" class="tab-content active">
+    <div class="kpi-grid" id="kpi-grid"></div>
+    <div id="alerts-container"></div>
+    <div class="table-wrap">
+      <div class="table-header">
+        <h2><i class="ti ti-receipt"></i> Vendas de Hoje</h2>
+      </div>
+      <div id="vendas-hoje-table"></div>
+    </div>
+  </div>
+
+  <!-- VENDER -->
+  <div id="tab-vender" class="tab-content">
+    <div class="form-card">
+      <h2><i class="ti ti-shopping-cart"></i> Registrar Venda</h2>
+      <div class="form-group">
+        <label>Sabor / Tamanho</label>
+        <select id="sell-item"></select>
+      </div>
+      <div class="form-group">
+        <label>Tipo de Preparo</label>
+        <div class="toggle-group">
+          <button class="toggle-btn active" id="btn-tipo-congelada" onclick="setTipo('Congelada')">&#10052; Congelada</button>
+          <button class="toggle-btn" id="btn-tipo-assada" onclick="setTipo('Assada')">&#128293; Assada (+R$2)</button>
+        </div>
+      </div>
+      <div class="form-group">
+        <label>Quantidade</label>
+        <input type="number" id="sell-qty" value="1" min="1" max="999">
+      </div>
+      <div class="form-group">
+        <label>Forma de Pagamento</label>
+        <select id="sell-payment">
+          <option value="Dinheiro">&#128181; Dinheiro</option>
+          <option value="Pix">&#128241; Pix</option>
+          <option value="Cartão Débito">&#128179; Cartão Débito</option>
+          <option value="Cartão Crédito">&#128179; Cartão Crédito</option>
+        </select>
+      </div>
+      <div id="sell-summary" style="display:none"></div>
+      <div id="sell-warning" class="sell-warning" style="display:none"></div>
+      <button class="btn btn-primary" id="btn-confirmar-venda" style="width:100%" onclick="confirmarVenda()">
+        <i class="ti ti-check"></i> Confirmar Venda
+      </button>
+    </div>
+  </div>
+
+  <!-- ESTOQUE -->
+  <div id="tab-estoque" class="tab-content">
+    <div class="page-header">
+      <span class="section-title"><i class="ti ti-box"></i> Estoque Atual</span>
+      <button class="btn btn-success" onclick="abrirModalEntrada()">
+        <i class="ti ti-plus"></i> Entrada de Mercadoria
+      </button>
+    </div>
+    <div class="table-wrap" id="estoque-wrap"></div>
+  </div>
+
+  <!-- CARDÁPIO -->
+  <div id="tab-cardapio" class="tab-content">
+    <div class="page-header">
+      <span class="section-title"><i class="ti ti-list"></i> Cardápio</span>
+      <button class="btn btn-primary" onclick="abrirModalCardapio(null)">
+        <i class="ti ti-plus"></i> Novo Item
+      </button>
+    </div>
+    <div class="table-wrap" id="cardapio-wrap"></div>
+  </div>
+
+  <!-- HISTÓRICO -->
+  <div id="tab-historico" class="tab-content">
+    <div class="section-title" style="margin-bottom:1rem"><i class="ti ti-history"></i> Histórico de Movimentações</div>
+    <div class="filters" id="hist-filters">
+      <button class="filter-btn active" data-filter="todos">Todos</button>
+      <button class="filter-btn" data-filter="venda">&#128722; Vendas</button>
+      <button class="filter-btn" data-filter="entrada">&#8679; Entradas</button>
+    </div>
+    <div class="table-wrap" id="historico-wrap"></div>
+  </div>
+</main>
+
+<!-- MODAL ENTRADA -->
+<div class="modal-overlay" id="modal-entrada" style="display:none">
+  <div class="modal">
+    <h3><i class="ti ti-arrow-bar-up"></i> Entrada de Mercadoria</h3>
+    <div class="form-group">
+      <label>Item</label>
+      <select id="entrada-item"></select>
+    </div>
+    <div class="form-group">
+      <label>Quantidade</label>
+      <input type="number" id="entrada-qty" value="10" min="1">
+    </div>
+    <div class="modal-actions">
+      <button class="btn btn-secondary" onclick="fecharModal('modal-entrada')">Cancelar</button>
+      <button class="btn btn-success" onclick="confirmarEntrada()"><i class="ti ti-check"></i> Registrar</button>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL CARDÁPIO -->
+<div class="modal-overlay" id="modal-cardapio" style="display:none">
+  <div class="modal">
+    <h3><i class="ti ti-pizza"></i> <span id="modal-cp-title">Novo Item</span></h3>
+    <div class="form-group">
+      <label>Sabor</label>
+      <input type="text" id="cp-sabor" placeholder="Ex: Portuguesa, Quatro Queijos...">
+    </div>
+    <div class="form-group">
+      <label>Tamanho</label>
+      <select id="cp-tamanho">
+        <option value="Pequena">Pequena</option>
+        <option value="Média" selected>Média</option>
+        <option value="Grande">Grande</option>
+        <option value="Família">Família</option>
+      </select>
+    </div>
+    <div class="form-group">
+      <label>Custo (R$)</label>
+      <input type="number" id="cp-custo" step="0.01" min="0" placeholder="0,00">
+    </div>
+    <div class="form-group">
+      <label>Preço Congelada (R$)</label>
+      <input type="number" id="cp-congelada" step="0.01" min="0" placeholder="0,00">
+    </div>
+    <div class="form-group">
+      <label>Preço Assada (R$)</label>
+      <input type="number" id="cp-assada" step="0.01" min="0" placeholder="0,00">
+    </div>
+    <input type="hidden" id="cp-edit-id">
+    <div class="modal-actions">
+      <button class="btn btn-secondary" onclick="fecharModal('modal-cardapio')">Cancelar</button>
+      <button class="btn btn-primary" onclick="salvarCardapio()"><i class="ti ti-check"></i> Salvar</button>
+    </div>
+  </div>
+</div>
+
+<div id="toast-container"></div>
+
+<script>
+// ===================== STATE =====================
+const KEYS = { cardapio: 'pz_cardapio', estoque: 'pz_estoque', hist: 'pz_hist' };
+const ESTOQUE_BAIXO = 2;
+
+let state = { cardapio: [], estoque: {}, hist: [] };
+let currentTab = 'dashboard';
+let tipoVenda = 'Congelada';
+let histFilter = 'todos';
+
+// ===================== INIT =====================
+function init() {
+  const defaultCardapio = [
+    { id: uid(), sabor: 'Calabresa', tamanho: 'Média', custo: 10, precoCongelada: 15, precoAssada: 17 },
+    { id: uid(), sabor: 'Mussarela', tamanho: 'Média', custo: 10, precoCongelada: 15, precoAssada: 17 },
+    { id: uid(), sabor: 'Frango c/ Catupiry', tamanho: 'Média', custo: 12, precoCongelada: 18, precoAssada: 20 },
+    { id: uid(), sabor: 'Calabresa', tamanho: 'Grande', custo: 16, precoCongelada: 24, precoAssada: 27 },
+    { id: uid(), sabor: 'Mussarela', tamanho: 'Grande', custo: 16, precoCongelada: 24, precoAssada: 27 },
+  ];
+
+  state.cardapio = load(KEYS.cardapio) || defaultCardapio;
+  state.estoque = load(KEYS.estoque) || {};
+  state.hist = load(KEYS.hist) || [];
+
+  // Garantir estoque inicial para itens sem registro
+  state.cardapio.forEach(item => {
+    if (state.estoque[item.id] === undefined) state.estoque[item.id] = 10;
+  });
+
+  persist();
+  bindNav();
+  bindSellListeners();
+  bindHistFilters();
+  bindModalClose();
+  renderTab('dashboard');
+}
+
+// ===================== HELPERS =====================
+function uid() {
+  return Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
+}
+
+function load(key) {
+  try { return JSON.parse(localStorage.getItem(key)); } catch { return null; }
+}
+
+function persist() {
+  localStorage.setItem(KEYS.cardapio, JSON.stringify(state.cardapio));
+  localStorage.setItem(KEYS.estoque, JSON.stringify(state.estoque));
+  localStorage.setItem(KEYS.hist, JSON.stringify(state.hist));
+}
+
+function brl(n) {
+  return 'R$ ' + Number(n).toFixed(2).replace('.', ',');
+}
+
+function fmtTime(ts) {
+  return new Date(ts).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+}
+
+function fmtDateTime(ts) {
+  return new Date(ts).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' });
+}
+
+function isToday(ts) {
+  const d = new Date(ts), n = new Date();
+  return d.getDate() === n.getDate() && d.getMonth() === n.getMonth() && d.getFullYear() === n.getFullYear();
+}
+
+function itemLabel(item) {
+  return item.sabor + ' ' + item.tamanho;
+}
+
+function toast(msg, type) {
+  const el = document.createElement('div');
+  el.className = 'toast' + (type ? ' ' + type : '');
+  el.textContent = msg;
+  document.getElementById('toast-container').appendChild(el);
+  setTimeout(() => el.remove(), 3500);
+}
+
+// ===================== NAV =====================
+function bindNav() {
+  document.getElementById('nav').addEventListener('click', e => {
+    const btn = e.target.closest('button[data-tab]');
+    if (!btn) return;
+    document.querySelectorAll('#nav button').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    document.querySelectorAll('.tab-content').forEach(t => t.classList.remove('active'));
+    currentTab = btn.dataset.tab;
+    document.getElementById('tab-' + currentTab).classList.add('active');
+    renderTab(currentTab);
+  });
+}
+
+function renderTab(tab) {
+  if (tab === 'dashboard') renderDashboard();
+  else if (tab === 'vender') renderVender();
+  else if (tab === 'estoque') renderEstoque();
+  else if (tab === 'cardapio') renderCardapio();
+  else if (tab === 'historico') renderHistorico();
+}
+
+// ===================== DASHBOARD =====================
+function renderDashboard() {
+  const vendasHoje = state.hist.filter(h => h.tipo === 'venda' && isToday(h.timestamp));
+  const totalVendas = vendasHoje.reduce((a, h) => a + h.total, 0);
+  const totalLucro = vendasHoje.reduce((a, h) => a + h.lucro, 0);
+  const totalPizzas = vendasHoje.reduce((a, h) => a + h.qtd, 0);
+  const margem = totalVendas > 0 ? Math.round((totalLucro / totalVendas) * 100) : 0;
+
+  document.getElementById('kpi-grid').innerHTML = `
+    <div class="card kpi-card">
+      <div class="icon"><i class="ti ti-currency-real"></i></div>
+      <div class="label">Vendas do Dia</div>
+      <div class="value">${brl(totalVendas)}</div>
+    </div>
+    <div class="card kpi-card">
+      <div class="icon"><i class="ti ti-trending-up"></i></div>
+      <div class="label">Lucro do Dia</div>
+      <div class="value" style="color:var(--green)">${brl(totalLucro)}</div>
+    </div>
+    <div class="card kpi-card">
+      <div class="icon"><i class="ti ti-pizza"></i></div>
+      <div class="label">Pizzas Vendidas</div>
+      <div class="value">${totalPizzas}</div>
+    </div>
+    <div class="card kpi-card">
+      <div class="icon"><i class="ti ti-chart-pie"></i></div>
+      <div class="label">Margem Média</div>
+      <div class="value">${margem}%</div>
+    </div>
+  `;
+
+  // Alertas de estoque baixo
+  const baixos = state.cardapio.filter(item => (state.estoque[item.id] || 0) <= ESTOQUE_BAIXO);
+  const alertsEl = document.getElementById('alerts-container');
+  alertsEl.innerHTML = '';
+  if (baixos.length > 0) {
+    const semEstoque = baixos.filter(i => (state.estoque[i.id] || 0) === 0);
+    const poucoEstoque = baixos.filter(i => (state.estoque[i.id] || 0) > 0);
+    let msg = '';
+    if (semEstoque.length > 0) msg += '<strong>Sem estoque:</strong> ' + semEstoque.map(i => itemLabel(i)).join(', ') + '. ';
+    if (poucoEstoque.length > 0) msg += '<strong>Estoque baixo:</strong> ' + poucoEstoque.map(i => itemLabel(i) + ' (' + state.estoque[i.id] + ' un.)').join(', ') + '.';
+    alertsEl.innerHTML = `<div class="alert danger"><i class="ti ti-alert-triangle"></i><div>${msg}</div></div>`;
+  }
+
+  // Tabela de vendas do dia
+  const sorted = [...vendasHoje].sort((a, b) => b.timestamp - a.timestamp);
+  document.getElementById('vendas-hoje-table').innerHTML = sorted.length === 0
+    ? `<div class="empty-state"><i class="ti ti-receipt-off"></i><p>Nenhuma venda registrada hoje</p></div>`
+    : `<table>
+        <thead><tr>
+          <th>Horário</th><th>Sabor</th><th>Tamanho</th><th>Tipo</th><th>Qtd</th><th>Pagamento</th><th>Total</th><th>Lucro</th>
+        </tr></thead>
+        <tbody>${sorted.map(v => `<tr>
+          <td>${fmtTime(v.timestamp)}</td>
+          <td>${v.sabor}</td>
+          <td>${v.tamanho}</td>
+          <td><span class="badge ${v.tipoVenda === 'Assada' ? 'badge-red' : 'badge-blue'}">${v.tipoVenda}</span></td>
+          <td><strong>${v.qtd}</strong></td>
+          <td><span class="badge badge-gray">${v.pagamento}</span></td>
+          <td><strong>${brl(v.total)}</strong></td>
+          <td style="color:var(--green-dark);font-weight:600">${brl(v.lucro)}</td>
+        </tr>`).join('')}
+        </tbody>
+      </table>`;
+}
+
+// ===================== VENDER =====================
+function renderVender() {
+  const sel = document.getElementById('sell-item');
+  const prev = sel.value;
+  sel.innerHTML = state.cardapio.map(item =>
+    `<option value="${item.id}">${itemLabel(item)} &nbsp;—&nbsp; Estoque: ${state.estoque[item.id] || 0} un.</option>`
+  ).join('') || '<option value="">Nenhum item cadastrado</option>';
+  if (prev && sel.querySelector(`option[value="${prev}"]`)) sel.value = prev;
+  updateSellSummary();
+}
+
+function bindSellListeners() {
+  document.getElementById('sell-item').addEventListener('change', updateSellSummary);
+  document.getElementById('sell-qty').addEventListener('input', updateSellSummary);
+}
+
+function setTipo(tipo) {
+  tipoVenda = tipo;
+  document.getElementById('btn-tipo-congelada').classList.toggle('active', tipo === 'Congelada');
+  document.getElementById('btn-tipo-assada').classList.toggle('active', tipo === 'Assada');
+  updateSellSummary();
+}
+
+function updateSellSummary() {
+  const itemId = document.getElementById('sell-item').value;
+  const qty = parseInt(document.getElementById('sell-qty').value) || 0;
+  const item = state.cardapio.find(i => i.id === itemId);
+  const estq = item ? (state.estoque[itemId] || 0) : 0;
+
+  const summaryEl = document.getElementById('sell-summary');
+  const warnEl = document.getElementById('sell-warning');
+  const btnEl = document.getElementById('btn-confirmar-venda');
+
+  if (!item || qty < 1) {
+    summaryEl.style.display = 'none';
+    warnEl.style.display = 'none';
+    btnEl.disabled = !item;
+    return;
+  }
+
+  const preco = tipoVenda === 'Assada' ? item.precoAssada : item.precoCongelada;
+  const total = preco * qty;
+  const lucro = (preco - item.custo) * qty;
+  const margemPct = Math.round(((preco - item.custo) / preco) * 100);
+
+  summaryEl.style.display = 'block';
+  summaryEl.innerHTML = `
+    <div class="summary-box">
+      <div class="summary-row"><span>Preço unitário:</span><span>${brl(preco)}</span></div>
+      <div class="summary-row"><span>Quantidade:</span><span>${qty} un.</span></div>
+      <div class="summary-row"><span>Estoque disponível:</span><span>${estq} un.</span></div>
+      <div class="summary-row total"><span>Total:</span><span>${brl(total)}</span></div>
+      <div class="summary-row profit"><span>Lucro estimado (${margemPct}%):</span><span>${brl(lucro)}</span></div>
+    </div>`;
+
+  if (estq === 0) {
+    warnEl.textContent = '🚫 Sem estoque disponível para este item!';
+    warnEl.style.display = 'block';
+    btnEl.disabled = true;
+  } else if (qty > estq) {
+    warnEl.textContent = `⚠️ Quantidade solicitada (${qty}) maior que o estoque (${estq} un.). Reduza a quantidade.`;
+    warnEl.style.display = 'block';
+    btnEl.disabled = true;
+  } else {
+    warnEl.style.display = 'none';
+    btnEl.disabled = false;
+  }
+}
+
+function confirmarVenda() {
+  const itemId = document.getElementById('sell-item').value;
+  const qty = parseInt(document.getElementById('sell-qty').value) || 0;
+  const pagamento = document.getElementById('sell-payment').value;
+  const item = state.cardapio.find(i => i.id === itemId);
+
+  if (!item) return toast('Selecione um item válido.', 'error');
+  if (qty < 1) return toast('Quantidade deve ser pelo menos 1.', 'error');
+  if ((state.estoque[itemId] || 0) < qty) return toast('Estoque insuficiente!', 'error');
+
+  const preco = tipoVenda === 'Assada' ? item.precoAssada : item.precoCongelada;
+  const total = preco * qty;
+  const lucro = (preco - item.custo) * qty;
+
+  state.estoque[itemId] = (state.estoque[itemId] || 0) - qty;
+
+  state.hist.push({
+    id: uid(),
+    tipo: 'venda',
+    timestamp: Date.now(),
+    itemId,
+    sabor: item.sabor,
+    tamanho: item.tamanho,
+    tipoVenda,
+    qtd: qty,
+    pagamento,
+    precoUnit: preco,
+    total,
+    lucro,
+  });
+
+  persist();
+  toast(`Venda registrada! ${qty}x ${itemLabel(item)} — ${brl(total)}`, 'success');
+  document.getElementById('sell-qty').value = 1;
+  renderVender();
+}
+
+// ===================== ESTOQUE =====================
+function renderEstoque() {
+  if (state.cardapio.length === 0) {
+    document.getElementById('estoque-wrap').innerHTML = '<div class="empty-state"><i class="ti ti-box-off"></i><p>Nenhum item no cardápio ainda</p></div>';
+    return;
+  }
+
+  const maxQty = Math.max(...state.cardapio.map(i => state.estoque[i.id] || 0), 20);
+
+  document.getElementById('estoque-wrap').innerHTML = `
+    <table>
+      <thead><tr>
+        <th>Item</th><th>Quantidade</th><th>Nível Visual</th><th>Status</th>
+      </tr></thead>
+      <tbody>${state.cardapio.map(item => {
+        const qty = state.estoque[item.id] || 0;
+        const pct = Math.min(maxQty > 0 ? (qty / maxQty) * 100 : 0, 100);
+        let status, badgeClass, barColor;
+        if (qty === 0) {
+          status = 'Sem estoque'; badgeClass = 'badge-red'; barColor = '#dc3545';
+        } else if (qty <= ESTOQUE_BAIXO) {
+          status = 'Estoque baixo'; badgeClass = 'badge-yellow'; barColor = '#ffc107';
+        } else {
+          status = 'OK'; badgeClass = 'badge-green'; barColor = 'var(--green)';
+        }
+        return `<tr>
+          <td><strong>${item.sabor}</strong> <span style="color:var(--gray-600)">${item.tamanho}</span></td>
+          <td><strong style="font-size:1rem">${qty}</strong> <span style="color:var(--gray-500);font-size:0.8rem">un.</span></td>
+          <td style="min-width:120px">
+            <div class="stock-bar-wrap">
+              <div class="stock-bar" style="width:${pct.toFixed(1)}%;background:${barColor}"></div>
+            </div>
+          </td>
+          <td><span class="badge ${badgeClass}">${status}</span></td>
+        </tr>`;
+      }).join('')}
+      </tbody>
+    </table>`;
+}
+
+function abrirModalEntrada() {
+  const sel = document.getElementById('entrada-item');
+  sel.innerHTML = state.cardapio.map(i =>
+    `<option value="${i.id}">${itemLabel(i)} (atual: ${state.estoque[i.id] || 0} un.)</option>`
+  ).join('');
+  document.getElementById('entrada-qty').value = 10;
+  document.getElementById('modal-entrada').style.display = 'flex';
+}
+
+function confirmarEntrada() {
+  const itemId = document.getElementById('entrada-item').value;
+  const qty = parseInt(document.getElementById('entrada-qty').value) || 0;
+  if (qty <= 0) return toast('Informe uma quantidade válida.', 'error');
+  const item = state.cardapio.find(i => i.id === itemId);
+  if (!item) return;
+
+  state.estoque[itemId] = (state.estoque[itemId] || 0) + qty;
+  state.hist.push({
+    id: uid(),
+    tipo: 'entrada',
+    timestamp: Date.now(),
+    itemId,
+    sabor: item.sabor,
+    tamanho: item.tamanho,
+    qtd: qty,
+  });
+
+  persist();
+  fecharModal('modal-entrada');
+  toast(`Entrada de ${qty} un. de ${itemLabel(item)} registrada!`, 'success');
+  renderEstoque();
+}
+
+// ===================== CARDÁPIO =====================
+function renderCardapio() {
+  if (state.cardapio.length === 0) {
+    document.getElementById('cardapio-wrap').innerHTML = '<div class="empty-state"><i class="ti ti-list-x"></i><p>Nenhum sabor cadastrado ainda</p></div>';
+    return;
+  }
+
+  document.getElementById('cardapio-wrap').innerHTML = `
+    <table>
+      <thead><tr>
+        <th>Sabor</th><th>Tamanho</th><th>Custo</th><th>Congelada</th><th>Assada</th><th>Margem</th><th>Ações</th>
+      </tr></thead>
+      <tbody>${state.cardapio.map(item => {
+        const margem = item.precoCongelada > 0
+          ? Math.round(((item.precoCongelada - item.custo) / item.precoCongelada) * 100)
+          : 0;
+        const margemClass = margem >= 40 ? 'badge-green' : margem >= 25 ? 'badge-yellow' : 'badge-red';
+        return `<tr>
+          <td><strong>${item.sabor}</strong></td>
+          <td>${item.tamanho}</td>
+          <td>${brl(item.custo)}</td>
+          <td>${brl(item.precoCongelada)}</td>
+          <td>${brl(item.precoAssada)}</td>
+          <td><span class="badge ${margemClass}">${margem}%</span></td>
+          <td>
+            <button class="btn btn-secondary btn-sm" onclick="abrirModalCardapio('${item.id}')">
+              <i class="ti ti-pencil"></i>
+            </button>
+            <button class="btn btn-danger btn-sm" style="margin-left:0.3rem" onclick="excluirCardapio('${item.id}')">
+              <i class="ti ti-trash"></i>
+            </button>
+          </td>
+        </tr>`;
+      }).join('')}
+      </tbody>
+    </table>`;
+}
+
+function abrirModalCardapio(id) {
+  const item = id ? state.cardapio.find(i => i.id === id) : null;
+  document.getElementById('modal-cp-title').textContent = item ? 'Editar Item' : 'Novo Item do Cardápio';
+  document.getElementById('cp-sabor').value = item ? item.sabor : '';
+  document.getElementById('cp-tamanho').value = item ? item.tamanho : 'Média';
+  document.getElementById('cp-custo').value = item ? item.custo : '';
+  document.getElementById('cp-congelada').value = item ? item.precoCongelada : '';
+  document.getElementById('cp-assada').value = item ? item.precoAssada : '';
+  document.getElementById('cp-edit-id').value = id || '';
+  document.getElementById('modal-cardapio').style.display = 'flex';
+  document.getElementById('cp-sabor').focus();
+}
+
+function salvarCardapio() {
+  const sabor = document.getElementById('cp-sabor').value.trim();
+  const tamanho = document.getElementById('cp-tamanho').value;
+  const custo = parseFloat(document.getElementById('cp-custo').value);
+  const congelada = parseFloat(document.getElementById('cp-congelada').value);
+  const assada = parseFloat(document.getElementById('cp-assada').value);
+  const editId = document.getElementById('cp-edit-id').value;
+
+  if (!sabor) return toast('Informe o sabor.', 'error');
+  if (isNaN(custo) || custo < 0) return toast('Informe o custo corretamente.', 'error');
+  if (isNaN(congelada) || congelada < 0) return toast('Informe o preço da congelada.', 'error');
+  if (isNaN(assada) || assada < 0) return toast('Informe o preço da assada.', 'error');
+
+  if (editId) {
+    const idx = state.cardapio.findIndex(i => i.id === editId);
+    if (idx >= 0) {
+      state.cardapio[idx] = { ...state.cardapio[idx], sabor, tamanho, custo, precoCongelada: congelada, precoAssada: assada };
+    }
+    toast('Item atualizado com sucesso!', 'success');
+  } else {
+    const newId = uid();
+    state.cardapio.push({ id: newId, sabor, tamanho, custo, precoCongelada: congelada, precoAssada: assada });
+    if (state.estoque[newId] === undefined) state.estoque[newId] = 0;
+    toast('Item cadastrado com sucesso!', 'success');
+  }
+
+  persist();
+  fecharModal('modal-cardapio');
+  renderCardapio();
+}
+
+function excluirCardapio(id) {
+  const item = state.cardapio.find(i => i.id === id);
+  if (!item) return;
+  if (!confirm(`Excluir "${itemLabel(item)}" do cardápio? Esta ação não pode ser desfeita.`)) return;
+  state.cardapio = state.cardapio.filter(i => i.id !== id);
+  delete state.estoque[id];
+  persist();
+  toast('Item excluído.', '');
+  renderCardapio();
+}
+
+// ===================== HISTÓRICO =====================
+function bindHistFilters() {
+  document.getElementById('hist-filters').addEventListener('click', e => {
+    const btn = e.target.closest('.filter-btn');
+    if (!btn) return;
+    histFilter = btn.dataset.filter;
+    document.querySelectorAll('#hist-filters .filter-btn').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    renderHistorico();
+  });
+}
+
+function renderHistorico() {
+  const filtered = histFilter === 'todos'
+    ? state.hist
+    : state.hist.filter(h => h.tipo === histFilter);
+
+  const sorted = [...filtered].sort((a, b) => b.timestamp - a.timestamp);
+
+  if (sorted.length === 0) {
+    document.getElementById('historico-wrap').innerHTML = '<div class="empty-state"><i class="ti ti-history-off"></i><p>Nenhuma movimentação encontrada</p></div>';
+    return;
+  }
+
+  document.getElementById('historico-wrap').innerHTML = `
+    <table>
+      <thead><tr>
+        <th>Data/Hora</th><th>Tipo</th><th>Item</th><th>Qtd</th><th class="hide-mobile">Preparo</th><th class="hide-mobile">Pagamento</th><th>Total</th>
+      </tr></thead>
+      <tbody>${sorted.map(h => `<tr>
+        <td style="white-space:nowrap;font-size:0.8rem">${fmtDateTime(h.timestamp)}</td>
+        <td><span class="badge ${h.tipo === 'venda' ? 'badge-red' : 'badge-green'}">${h.tipo === 'venda' ? 'Venda' : 'Entrada'}</span></td>
+        <td>${h.sabor} <span style="color:var(--gray-500)">${h.tamanho}</span></td>
+        <td>${h.qtd}</td>
+        <td class="hide-mobile">${h.tipoVenda ? `<span class="badge ${h.tipoVenda === 'Assada' ? 'badge-red' : 'badge-blue'}">${h.tipoVenda}</span>` : '—'}</td>
+        <td class="hide-mobile">${h.pagamento ? `<span class="badge badge-gray">${h.pagamento}</span>` : '—'}</td>
+        <td>${h.tipo === 'venda' ? `<strong>${brl(h.total)}</strong>` : '<span style="color:var(--gray-500)">—</span>'}</td>
+      </tr>`).join('')}
+      </tbody>
+    </table>`;
+}
+
+// ===================== MODALS =====================
+function fecharModal(id) {
+  document.getElementById(id).style.display = 'none';
+}
+
+function bindModalClose() {
+  document.querySelectorAll('.modal-overlay').forEach(overlay => {
+    overlay.addEventListener('click', e => {
+      if (e.target === overlay) overlay.style.display = 'none';
+    });
+  });
+  document.addEventListener('keydown', e => {
+    if (e.key === 'Escape') {
+      document.querySelectorAll('.modal-overlay').forEach(m => m.style.display = 'none');
+    }
+  });
+}
+
+// ===================== START =====================
+init();
+</script>
+</body>
+</html>
