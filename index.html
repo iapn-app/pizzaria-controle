@@ -470,6 +470,12 @@
 
   <!-- VENDER -->
   <div id="tab-vender" class="tab-content">
+    <div class="filters" id="venda-cat-filters" style="margin-bottom:1rem">
+      <button class="filter-btn active" id="vcat-pizza" onclick="setVendaCategoria('pizza',this)">🍕 Pizza</button>
+      <button class="filter-btn" id="vcat-salgado" onclick="setVendaCategoria('salgado',this)">🥟 Salgado</button>
+      <button class="filter-btn" id="vcat-sobremesa" onclick="setVendaCategoria('sobremesa',this)">🍰 Sobremesa</button>
+      <button class="filter-btn" id="vcat-bebida" onclick="setVendaCategoria('bebida',this)">🥤 Bebida</button>
+    </div>
     <div class="vender-grid">
       <!-- Coluna esquerda: formulário -->
       <div class="card">
@@ -478,7 +484,7 @@
           <label>Sabor / Tamanho</label>
           <select id="sell-item"></select>
         </div>
-        <div class="form-group">
+        <div class="form-group" id="tipo-preparo-group">
           <label>Tipo de Preparo</label>
           <div class="toggle-group">
             <button class="toggle-btn active" id="btn-tipo-congelada" onclick="setTipo('Congelada')">&#10052; Congelada</button>
@@ -520,10 +526,17 @@
   <!-- PRODUTOS & ESTOQUE -->
   <div id="tab-produtos" class="tab-content">
     <div class="page-header">
-      <span class="section-title"><i class="ti ti-pizza"></i> Estoque</span>
+      <span class="section-title"><i class="ti ti-package"></i> Estoque</span>
       <button class="btn btn-primary" onclick="abrirModalCardapio(null)">
-        <i class="ti ti-plus"></i> Nova pizza
+        <i class="ti ti-plus"></i> Novo produto
       </button>
+    </div>
+    <div class="filters" id="estoque-cat-filters" style="margin-bottom:1rem">
+      <button class="filter-btn active" id="ecat-todas" onclick="setEstoqueCategoria('todas',this)">Todos</button>
+      <button class="filter-btn" id="ecat-pizza" onclick="setEstoqueCategoria('pizza',this)">🍕 Pizza</button>
+      <button class="filter-btn" id="ecat-salgado" onclick="setEstoqueCategoria('salgado',this)">🥟 Salgado</button>
+      <button class="filter-btn" id="ecat-sobremesa" onclick="setEstoqueCategoria('sobremesa',this)">🍰 Sobremesa</button>
+      <button class="filter-btn" id="ecat-bebida" onclick="setEstoqueCategoria('bebida',this)">🥤 Bebida</button>
     </div>
     <div style="position:relative;margin-bottom:1rem">
       <input type="text" id="busca-produto" placeholder="Buscar sabor ou tamanho..."
@@ -573,31 +586,39 @@
 <!-- MODAL CARDÁPIO -->
 <div class="modal-overlay" id="modal-cardapio" style="display:none">
   <div class="modal">
-    <h3><i class="ti ti-pizza"></i> <span id="modal-cp-title">Novo Item</span></h3>
+    <h3><i class="ti ti-package"></i> <span id="modal-cp-title">Novo Item</span></h3>
     <div class="form-group">
-      <label>Sabor</label>
-      <input type="text" id="cp-sabor" placeholder="Ex: Portuguesa, Quatro Queijos...">
+      <label>Categoria</label>
+      <select id="cp-categoria" onchange="onCategoriaProdutoChange(this.value)">
+        <option value="pizza">🍕 Pizza</option>
+        <option value="salgado">🥟 Salgado</option>
+        <option value="sobremesa">🍰 Sobremesa</option>
+        <option value="bebida">🥤 Bebida</option>
+      </select>
     </div>
     <div class="form-group">
-      <label>Tamanho</label>
-      <select id="cp-tamanho">
-        <option value="Pequena">Pequena</option>
-        <option value="Média" selected>Média</option>
-        <option value="Grande">Grande</option>
-        <option value="Família">Família</option>
-      </select>
+      <label>Nome / Sabor</label>
+      <input type="text" id="cp-sabor" placeholder="Ex: Portuguesa, Coxinha, Coca-Cola...">
+    </div>
+    <div class="form-group">
+      <label>Tamanho / Variação</label>
+      <input type="text" id="cp-tamanho" placeholder="Ex: Média, 500ml, 300g...">
     </div>
     <div class="form-group">
       <label>Custo (R$)</label>
       <input type="number" id="cp-custo" step="0.01" min="0" placeholder="0,00">
     </div>
-    <div class="form-group">
+    <div id="cp-congelada-group" class="form-group">
       <label>Preço Congelada (R$)</label>
       <input type="number" id="cp-congelada" step="0.01" min="0" placeholder="0,00">
     </div>
-    <div class="form-group">
+    <div id="cp-assada-group" class="form-group">
       <label>Preço Assada (R$)</label>
       <input type="number" id="cp-assada" step="0.01" min="0" placeholder="0,00">
+    </div>
+    <div id="cp-preco-unico-group" class="form-group" style="display:none">
+      <label>Preço de Venda (R$)</label>
+      <input type="number" id="cp-preco-unico" step="0.01" min="0" placeholder="0,00">
     </div>
     <input type="hidden" id="cp-edit-id">
     <div class="modal-actions">
@@ -684,6 +705,7 @@
 <script>
 // ===================== STATE =====================
 const KEYS = { cardapio: 'pz_cardapio', estoque: 'pz_estoque', hist: 'pz_hist', usuarios: 'pz_usuarios', caixas: 'pz_caixas', config: 'pz_config' };
+const CAT_LABELS = { pizza: '🍕 Pizza', salgado: '🥟 Salgado', sobremesa: '🍰 Sobremesa', bebida: '🥤 Bebida' };
 
 const SUPA_URL = 'https://fhgvluopiogtusjmwiro.supabase.co';
 const SUPA_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImZoZ3ZsdW9waW9ndHVzam13aXJvIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODI4OTA3MzgsImV4cCI6MjA5ODQ2NjczOH0.FYnlqFHWkgeS8r4zkJiwvqvNKp8jO7o0f5Id54-iIfU';
@@ -701,6 +723,8 @@ let histFilter = 'todos';
 let dashPeriod = 'hoje';
 let dashStart = '';
 let dashEnd = '';
+let vendaCategoria = 'pizza';
+let estoqueCategoria = 'todas';
 
 // ===================== INIT =====================
 async function carregarCardapio() {
@@ -714,6 +738,8 @@ async function carregarCardapio() {
     precoCongelada: Number(r.preco_cong),
     precoAssada: Number(r.preco_ass),
     estoqueMin: r.estoque_min,
+    categoria: r.categoria || 'pizza',
+    tipoVenda: r.tipo_venda || 'congelada_assada',
   }));
   state.estoque = {};
   data.forEach(r => {
@@ -1087,8 +1113,8 @@ async function renderDashboard() {
       <div class="value" style="color:var(--green)">${brl(totalLucro)}</div>
     </div>
     <div class="card kpi-card">
-      <div class="icon"><i class="ti ti-pizza"></i></div>
-      <div class="label">Pizzas Vendidas</div>
+      <div class="icon"><i class="ti ti-shopping-bag"></i></div>
+      <div class="label">Itens Vendidos</div>
       <div class="value">${totalPizzas}</div>
     </div>
     <div class="card kpi-card">
@@ -1138,7 +1164,10 @@ async function renderDashboard() {
   const rankMap = {};
   vendas.forEach(v => {
     const key = v.sabor + '|' + v.tamanho;
-    if (!rankMap[key]) rankMap[key] = { sabor: v.sabor, tamanho: v.tamanho, qtd: 0, total: 0 };
+    if (!rankMap[key]) {
+      const catItem = state.cardapio.find(i => i.sabor === v.sabor && i.tamanho === v.tamanho);
+      rankMap[key] = { sabor: v.sabor, tamanho: v.tamanho, categoria: catItem ? catItem.categoria : 'pizza', qtd: 0, total: 0 };
+    }
     rankMap[key].qtd += Number(v.quantidade);
     rankMap[key].total += Number(v.total);
   });
@@ -1148,14 +1177,15 @@ async function renderDashboard() {
     rankingWrap.innerHTML = ranking.length === 0 ? '' : `
       <div class="table-wrap">
         <div class="table-header">
-          <h2><i class="ti ti-trophy"></i> Sabores Mais Vendidos</h2>
+          <h2><i class="ti ti-trophy"></i> Mais Vendidos</h2>
         </div>
         <table>
-          <thead><tr><th>#</th><th>Sabor</th><th>Tamanho</th><th>Qtd Vendida</th><th>Total R$</th></tr></thead>
+          <thead><tr><th>#</th><th>Sabor</th><th>Tamanho</th><th>Categoria</th><th>Qtd Vendida</th><th>Total R$</th></tr></thead>
           <tbody>${ranking.map((r, i) => `<tr>
             <td style="color:var(--gray-500);font-weight:700">${i + 1}º</td>
             <td><strong>${r.sabor}</strong></td>
             <td>${r.tamanho}</td>
+            <td><span class="badge badge-blue" style="font-size:0.7rem">${CAT_LABELS[r.categoria] || r.categoria}</span></td>
             <td><strong>${r.qtd}</strong> un.</td>
             <td><strong>${brl(r.total)}</strong></td>
           </tr>`).join('')}
@@ -1210,10 +1240,16 @@ async function renderDashboard() {
 function renderVender() {
   const sel = document.getElementById('sell-item');
   const prev = sel.value;
-  sel.innerHTML = state.cardapio.map(item =>
+  const filtered = state.cardapio.filter(i => i.categoria === vendaCategoria);
+  sel.innerHTML = filtered.map(item =>
     `<option value="${item.id}">${itemLabel(item)} &nbsp;—&nbsp; Estoque: ${state.estoque[item.id] || 0} un.</option>`
-  ).join('') || '<option value="">Nenhum item cadastrado</option>';
+  ).join('') || '<option value="">Nenhum item nesta categoria</option>';
   if (prev && sel.querySelector(`option[value="${prev}"]`)) sel.value = prev;
+
+  const isPizza = vendaCategoria === 'pizza';
+  const tipoGroup = document.getElementById('tipo-preparo-group');
+  if (tipoGroup) tipoGroup.style.display = isPizza ? '' : 'none';
+
   renderPaymentRows(getCurrentTotal());
   updateSellSummary();
 }
@@ -1251,7 +1287,9 @@ function getCurrentTotal() {
   const qty = parseInt(document.getElementById('sell-qty').value) || 0;
   const item = state.cardapio.find(i => i.id === itemId);
   if (!item || qty < 1) return 0;
-  return (tipoVenda === 'Assada' ? item.precoAssada : item.precoCongelada) * qty;
+  const preco = item.tipoVenda === 'preco_unico' ? item.precoCongelada
+    : (tipoVenda === 'Assada' ? item.precoAssada : item.precoCongelada);
+  return preco * qty;
 }
 
 function refreshLastPaymentRow(total) {
@@ -1321,6 +1359,27 @@ function setTipo(tipo) {
   updateSellSummary();
 }
 
+function setVendaCategoria(cat, btn) {
+  vendaCategoria = cat;
+  document.querySelectorAll('#venda-cat-filters .filter-btn').forEach(b => b.classList.remove('active'));
+  if (btn) btn.classList.add('active');
+  renderVender();
+}
+
+function setEstoqueCategoria(cat, btn) {
+  estoqueCategoria = cat;
+  document.querySelectorAll('#estoque-cat-filters .filter-btn').forEach(b => b.classList.remove('active'));
+  if (btn) btn.classList.add('active');
+  renderProdutos();
+}
+
+function onCategoriaProdutoChange(cat) {
+  const isPizza = cat === 'pizza';
+  document.getElementById('cp-congelada-group').style.display = isPizza ? '' : 'none';
+  document.getElementById('cp-assada-group').style.display = isPizza ? '' : 'none';
+  document.getElementById('cp-preco-unico-group').style.display = isPizza ? 'none' : '';
+}
+
 function updateSellSummary() {
   const itemId = document.getElementById('sell-item').value;
   const qty = parseInt(document.getElementById('sell-qty').value) || 0;
@@ -1340,7 +1399,8 @@ function updateSellSummary() {
     return;
   }
 
-  const preco = tipoVenda === 'Assada' ? item.precoAssada : item.precoCongelada;
+  const preco = item.tipoVenda === 'preco_unico' ? item.precoCongelada
+    : (tipoVenda === 'Assada' ? item.precoAssada : item.precoCongelada);
   const total = preco * qty;
 
   const emptyEl = document.getElementById('sell-summary-empty');
@@ -1382,7 +1442,9 @@ async function confirmarVenda() {
   if (qty < 1) return toast('Quantidade deve ser pelo menos 1.', 'error');
   if ((state.estoque[itemId] || 0) < qty) return toast('Estoque insuficiente!', 'error');
 
-  const preco = tipoVenda === 'Assada' ? item.precoAssada : item.precoCongelada;
+  const tipoEfetivo = item.tipoVenda === 'preco_unico' ? 'Único' : tipoVenda;
+  const preco = item.tipoVenda === 'preco_unico' ? item.precoCongelada
+    : (tipoVenda === 'Assada' ? item.precoAssada : item.precoCongelada);
   const total = preco * qty;
   const lucro = (preco - item.custo) * qty;
 
@@ -1406,7 +1468,7 @@ async function confirmarVenda() {
     sabor: item.sabor,
     tamanho: item.tamanho,
     cardapio_id: Number(itemId),
-    tipo: tipoVenda,
+    tipo: tipoEfetivo,
     quantidade: qty,
     preco_unit: preco,
     total,
@@ -1419,7 +1481,7 @@ async function confirmarVenda() {
   await db.from('historico').insert({
     tipo: 'venda',
     descricao: `${qty}x ${itemLabel(item)} (${tipoVenda}) — ${pagamentoStr}`,
-    dados: { sabor: item.sabor, tamanho: item.tamanho, tipoVenda, qtd: qty, pagamentos: pagamentosJson, precoUnit: preco, total, lucro },
+    dados: { sabor: item.sabor, tamanho: item.tamanho, tipoVenda: tipoEfetivo, qtd: qty, pagamentos: pagamentosJson, precoUnit: preco, total, lucro },
   });
 
   await carregarCardapio();
@@ -1446,23 +1508,27 @@ function limparBusca() {
 
 function renderProdutos() {
   if (state.cardapio.length === 0) {
-    document.getElementById('produtos-wrap').innerHTML = '<div class="empty-state"><i class="ti ti-pizza-off"></i><p>Nenhuma pizza cadastrada ainda</p></div>';
+    document.getElementById('produtos-wrap').innerHTML = '<div class="empty-state"><i class="ti ti-package-off"></i><p>Nenhum produto cadastrado ainda</p></div>';
     return;
   }
 
-  const items = produtosQuery
-    ? state.cardapio.filter(i => (i.sabor + ' ' + i.tamanho).toLowerCase().includes(produtosQuery))
-    : state.cardapio;
+  let items = estoqueCategoria === 'todas'
+    ? state.cardapio
+    : state.cardapio.filter(i => i.categoria === estoqueCategoria);
+
+  if (produtosQuery) {
+    items = items.filter(i => (i.sabor + ' ' + i.tamanho).toLowerCase().includes(produtosQuery));
+  }
 
   if (items.length === 0) {
-    document.getElementById('produtos-wrap').innerHTML = '<div class="empty-state"><i class="ti ti-search-off"></i><p>Nenhuma pizza encontrada</p></div>';
+    document.getElementById('produtos-wrap').innerHTML = '<div class="empty-state"><i class="ti ti-search-off"></i><p>Nenhum produto encontrado</p></div>';
     return;
   }
 
   document.getElementById('produtos-wrap').innerHTML = `
     <table>
       <thead><tr>
-        <th>Sabor</th><th>Tamanho</th><th class="hide-mobile">Custo</th><th>Congelada</th><th>Assada</th><th>Estoque</th><th>Mín.</th><th>Status</th><th>Ações</th>
+        <th>Nome</th><th>Tamanho</th><th>Categoria</th><th class="hide-mobile">Custo</th><th>Preço(s)</th><th>Estoque</th><th>Mín.</th><th>Status</th><th>Ações</th>
       </tr></thead>
       <tbody>${items.map(item => {
         const qty = state.estoque[item.id] || 0;
@@ -1471,21 +1537,27 @@ function renderProdutos() {
         if (qty === 0) { status = 'Sem estoque'; badgeClass = 'badge-red'; }
         else if (qty <= min) { status = 'Baixo'; badgeClass = 'badge-yellow'; }
         else { status = 'OK'; badgeClass = 'badge-green'; }
+        const precos = item.tipoVenda === 'preco_unico'
+          ? brl(item.precoCongelada)
+          : `${brl(item.precoCongelada)} / ${brl(item.precoAssada)}`;
         return `<tr>
           <td><strong>${item.sabor}</strong></td>
           <td>${item.tamanho}</td>
+          <td><span class="badge badge-blue" style="font-size:0.7rem">${CAT_LABELS[item.categoria] || item.categoria}</span></td>
           <td class="hide-mobile">${brl(item.custo)}</td>
-          <td>${brl(item.precoCongelada)}</td>
-          <td>${brl(item.precoAssada)}</td>
+          <td>${precos}</td>
           <td><strong>${qty}</strong> <span style="color:var(--gray-500);font-size:0.8rem">un.</span></td>
           <td><input type="number" min="0" value="${min}" style="width:60px;padding:0.25rem 0.4rem;font-size:0.8rem;border:1.5px solid var(--gray-300);border-radius:4px" onchange="salvarEstoqueMin('${item.id}', this.value)"></td>
           <td><span class="badge ${badgeClass}">${status}</span></td>
           <td style="white-space:nowrap">
-            <button class="btn btn-success btn-sm" onclick="abrirModalEntrada('${item.id}')">
+            <button class="btn btn-secondary btn-sm" onclick="abrirModalCardapio('${item.id}')">
+              <i class="ti ti-edit"></i>
+            </button>
+            <button class="btn btn-success btn-sm" style="margin-left:0.3rem" onclick="abrirModalEntrada('${item.id}')">
               <i class="ti ti-plus"></i> Entrada
             </button>
             <button class="btn btn-secondary btn-sm" style="margin-left:0.3rem" onclick="abrirModalAjuste('${item.id}')">
-              <i class="ti ti-adjustments"></i> Ajustar
+              <i class="ti ti-adjustments"></i>
             </button>
             <button class="btn btn-danger btn-sm" style="margin-left:0.3rem" onclick="excluirCardapio('${item.id}')">
               <i class="ti ti-trash"></i>
@@ -1565,38 +1637,54 @@ async function salvarAjuste() {
 function abrirModalCardapio(id) {
   const item = id ? state.cardapio.find(i => i.id === id) : null;
   document.getElementById('modal-cp-title').textContent = item ? 'Editar Item' : 'Novo Item do Cardápio';
+  const cat = item ? item.categoria : (estoqueCategoria !== 'todas' ? estoqueCategoria : 'pizza');
+  document.getElementById('cp-categoria').value = cat;
   document.getElementById('cp-sabor').value = item ? item.sabor : '';
-  document.getElementById('cp-tamanho').value = item ? item.tamanho : 'Média';
+  document.getElementById('cp-tamanho').value = item ? item.tamanho : '';
   document.getElementById('cp-custo').value = item ? item.custo : '';
-  document.getElementById('cp-congelada').value = item ? item.precoCongelada : '';
-  document.getElementById('cp-assada').value = item ? item.precoAssada : '';
+  const isPizza = cat === 'pizza';
+  document.getElementById('cp-congelada').value = item && isPizza ? item.precoCongelada : '';
+  document.getElementById('cp-assada').value = item && isPizza ? item.precoAssada : '';
+  document.getElementById('cp-preco-unico').value = item && !isPizza ? item.precoCongelada : '';
   document.getElementById('cp-edit-id').value = id || '';
+  onCategoriaProdutoChange(cat);
   document.getElementById('modal-cardapio').style.display = 'flex';
   document.getElementById('cp-sabor').focus();
 }
 
 async function salvarCardapio() {
+  const categoria = document.getElementById('cp-categoria').value;
   const sabor = document.getElementById('cp-sabor').value.trim();
-  const tamanho = document.getElementById('cp-tamanho').value;
+  const tamanho = document.getElementById('cp-tamanho').value.trim();
   const custo = parseFloat(document.getElementById('cp-custo').value);
-  const congelada = parseFloat(document.getElementById('cp-congelada').value);
-  const assada = parseFloat(document.getElementById('cp-assada').value);
   const editId = document.getElementById('cp-edit-id').value;
+  const isPizza = categoria === 'pizza';
+  const tipo_venda = isPizza ? 'congelada_assada' : 'preco_unico';
 
-  if (!sabor) return toast('Informe o sabor.', 'error');
+  let preco_cong, preco_ass;
+  if (isPizza) {
+    preco_cong = parseFloat(document.getElementById('cp-congelada').value);
+    preco_ass = parseFloat(document.getElementById('cp-assada').value);
+  } else {
+    preco_cong = parseFloat(document.getElementById('cp-preco-unico').value);
+    preco_ass = preco_cong;
+  }
+
+  if (!sabor) return toast('Informe o nome/sabor.', 'error');
+  if (!tamanho) return toast('Informe o tamanho/variação.', 'error');
   if (isNaN(custo) || custo < 0) return toast('Informe o custo corretamente.', 'error');
-  if (isNaN(congelada) || congelada < 0) return toast('Informe o preço da congelada.', 'error');
-  if (isNaN(assada) || assada < 0) return toast('Informe o preço da assada.', 'error');
+  if (isNaN(preco_cong) || preco_cong < 0) return toast('Informe o preço de venda.', 'error');
+  if (isPizza && (isNaN(preco_ass) || preco_ass < 0)) return toast('Informe o preço assada.', 'error');
 
   if (editId) {
     const { error } = await db.from('cardapio').update({
-      sabor, tamanho, custo, preco_cong: congelada, preco_ass: assada,
+      sabor, tamanho, custo, preco_cong, preco_ass, categoria, tipo_venda,
     }).eq('id', Number(editId));
     if (error) return toast('Erro ao atualizar item.', 'error');
     toast('Item atualizado com sucesso!', 'success');
   } else {
     const { data: novo, error } = await db.from('cardapio').insert({
-      sabor, tamanho, custo, preco_cong: congelada, preco_ass: assada, estoque_min: config.estoqueMinGlobal,
+      sabor, tamanho, custo, preco_cong, preco_ass, categoria, tipo_venda, estoque_min: config.estoqueMinGlobal,
     }).select().single();
     if (error || !novo) return toast('Erro ao cadastrar item.', 'error');
     await db.from('estoque').insert({ cardapio_id: novo.id, quantidade: 0 });
