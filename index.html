@@ -510,6 +510,7 @@
       <button class="filter-btn active" data-filter="todos">Todos</button>
       <button class="filter-btn" data-filter="venda">&#128722; Vendas</button>
       <button class="filter-btn" data-filter="entrada">&#8679; Entradas</button>
+      <button class="filter-btn" data-filter="ajuste">&#9881; Ajustes</button>
     </div>
     <div class="table-wrap" id="historico-wrap"></div>
   </div>
@@ -614,6 +615,33 @@
     <div class="modal-actions">
       <button class="btn btn-secondary" onclick="fecharModal('modal-funcionario')">Cancelar</button>
       <button class="btn btn-primary" onclick="salvarFuncionario()"><i class="ti ti-check"></i> Salvar</button>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL AJUSTE DE ESTOQUE -->
+<div class="modal-overlay" id="modal-ajuste" style="display:none">
+  <div class="modal">
+    <h3><i class="ti ti-adjustments"></i> Ajustar Estoque</h3>
+    <p id="ajuste-item-nome" style="font-size:0.875rem;color:var(--gray-600);margin-bottom:1rem;font-weight:500"></p>
+    <input type="hidden" id="ajuste-item-id">
+    <div class="form-group">
+      <label>Nova quantidade</label>
+      <input type="number" id="ajuste-qty" min="0">
+    </div>
+    <div class="form-group">
+      <label>Motivo</label>
+      <select id="ajuste-motivo">
+        <option value="Correção manual">Correção manual</option>
+        <option value="Desperdício">Desperdício</option>
+        <option value="Avaria">Avaria</option>
+        <option value="Furto">Furto</option>
+        <option value="Inventário">Inventário</option>
+      </select>
+    </div>
+    <div class="modal-actions">
+      <button class="btn btn-secondary" onclick="fecharModal('modal-ajuste')">Cancelar</button>
+      <button class="btn btn-primary" onclick="salvarAjuste()"><i class="ti ti-check"></i> Salvar ajuste</button>
     </div>
   </div>
 </div>
@@ -1293,6 +1321,9 @@ function renderProdutos() {
             <button class="btn btn-success btn-sm" onclick="abrirModalEntrada('${item.id}')">
               <i class="ti ti-plus"></i> Entrada
             </button>
+            <button class="btn btn-secondary btn-sm" style="margin-left:0.3rem" onclick="abrirModalAjuste('${item.id}')">
+              <i class="ti ti-adjustments"></i> Ajustar
+            </button>
             <button class="btn btn-danger btn-sm" style="margin-left:0.3rem" onclick="excluirCardapio('${item.id}')">
               <i class="ti ti-trash"></i>
             </button>
@@ -1334,6 +1365,44 @@ function confirmarEntrada() {
   persist();
   fecharModal('modal-entrada');
   toast(`Entrada de ${qty} un. de ${itemLabel(item)} registrada!`, 'success');
+  renderProdutos();
+}
+
+function abrirModalAjuste(id) {
+  const item = state.cardapio.find(i => i.id === id);
+  if (!item) return;
+  document.getElementById('ajuste-item-id').value = id;
+  document.getElementById('ajuste-item-nome').textContent =
+    itemLabel(item) + ' — Estoque atual: ' + (state.estoque[id] || 0) + ' un.';
+  document.getElementById('ajuste-qty').value = state.estoque[id] || 0;
+  document.getElementById('ajuste-motivo').value = 'Correção manual';
+  document.getElementById('modal-ajuste').style.display = 'flex';
+  document.getElementById('ajuste-qty').focus();
+}
+
+function salvarAjuste() {
+  const itemId = document.getElementById('ajuste-item-id').value;
+  const novaQty = parseInt(document.getElementById('ajuste-qty').value);
+  const motivo = document.getElementById('ajuste-motivo').value;
+  if (isNaN(novaQty) || novaQty < 0) return toast('Informe uma quantidade válida.', 'error');
+  const item = state.cardapio.find(i => i.id === itemId);
+  if (!item) return;
+  const qtdAnterior = state.estoque[itemId] || 0;
+  state.estoque[itemId] = novaQty;
+  state.hist.push({
+    id: uid(),
+    tipo: 'ajuste',
+    timestamp: Date.now(),
+    itemId,
+    sabor: item.sabor,
+    tamanho: item.tamanho,
+    qtdAnterior,
+    qtd: novaQty,
+    motivo,
+  });
+  persist();
+  fecharModal('modal-ajuste');
+  toast(`Estoque de ${itemLabel(item)} ajustado: ${qtdAnterior} → ${novaQty} un.`, 'success');
   renderProdutos();
 }
 
@@ -1430,19 +1499,29 @@ function renderHistorico() {
       <thead><tr>
         <th>Data/Hora</th><th>Tipo</th><th>Item</th><th>Qtd</th><th class="hide-mobile">Preparo</th><th class="hide-mobile">Pagamento</th><th>Total</th>
       </tr></thead>
-      <tbody>${sorted.map(h => `<tr>
-        <td style="white-space:nowrap;font-size:0.8rem">${fmtDateTime(h.timestamp)}</td>
-        <td><span class="badge ${h.tipo === 'venda' ? 'badge-red' : 'badge-green'}">${h.tipo === 'venda' ? 'Venda' : 'Entrada'}</span></td>
-        <td>${h.sabor} <span style="color:var(--gray-500)">${h.tamanho}</span></td>
-        <td>${h.qtd}</td>
-        <td class="hide-mobile">${h.tipoVenda ? `<span class="badge ${h.tipoVenda === 'Assada' ? 'badge-red' : 'badge-blue'}">${h.tipoVenda}</span>` : '—'}</td>
-        <td class="hide-mobile">${h.pagamento
-          ? (h.pagamento.includes('+')
-              ? `<span style="font-size:0.78rem;color:var(--gray-700)">${h.pagamento}</span>`
-              : `<span class="badge badge-gray">${h.pagamento}</span>`)
-          : '—'}</td>
-        <td>${h.tipo === 'venda' ? `<strong>${brl(h.total)}</strong>` : '<span style="color:var(--gray-500)">—</span>'}</td>
-      </tr>`).join('')}
+      <tbody>${sorted.map(h => {
+        const tipoBadge = h.tipo === 'venda'
+          ? '<span class="badge badge-red">Venda</span>'
+          : h.tipo === 'entrada'
+            ? '<span class="badge badge-green">Entrada</span>'
+            : '<span class="badge badge-orange">&#9881; Ajuste</span>';
+        const itemDesc = h.tipo === 'ajuste'
+          ? `<strong>${h.sabor}</strong> <span style="color:var(--gray-500)">${h.tamanho}</span> — de ${h.qtdAnterior} para ${h.qtd} <span style="color:var(--gray-500);font-size:0.8rem">(${h.motivo})</span>`
+          : `${h.sabor} <span style="color:var(--gray-500)">${h.tamanho}</span>`;
+        return `<tr>
+          <td style="white-space:nowrap;font-size:0.8rem">${fmtDateTime(h.timestamp)}</td>
+          <td>${tipoBadge}</td>
+          <td>${itemDesc}</td>
+          <td>${h.tipo === 'ajuste' ? '<span style="color:var(--gray-500)">—</span>' : h.qtd}</td>
+          <td class="hide-mobile">${h.tipoVenda ? `<span class="badge ${h.tipoVenda === 'Assada' ? 'badge-red' : 'badge-blue'}">${h.tipoVenda}</span>` : '—'}</td>
+          <td class="hide-mobile">${h.pagamento
+            ? (h.pagamento.includes('+')
+                ? `<span style="font-size:0.78rem;color:var(--gray-700)">${h.pagamento}</span>`
+                : `<span class="badge badge-gray">${h.pagamento}</span>`)
+            : '—'}</td>
+          <td>${h.tipo === 'venda' ? `<strong>${brl(h.total)}</strong>` : '<span style="color:var(--gray-500)">—</span>'}</td>
+        </tr>`;
+      }).join('')}
       </tbody>
     </table>`;
 }
