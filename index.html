@@ -410,7 +410,7 @@
   </button>
   <button data-tab="produtos" data-perfil="dono">
     <i class="ti ti-pizza"></i>
-    <span class="nav-label">Produtos &amp; Estoque</span>
+    <span class="nav-label">Estoque</span>
   </button>
   <button data-tab="historico" data-perfil="dono">
     <i class="ti ti-history"></i>
@@ -484,10 +484,17 @@
   <!-- PRODUTOS & ESTOQUE -->
   <div id="tab-produtos" class="tab-content">
     <div class="page-header">
-      <span class="section-title"><i class="ti ti-pizza"></i> Produtos &amp; Estoque</span>
+      <span class="section-title"><i class="ti ti-pizza"></i> Estoque</span>
       <button class="btn btn-primary" onclick="abrirModalCardapio(null)">
         <i class="ti ti-plus"></i> Nova pizza
       </button>
+    </div>
+    <div style="position:relative;margin-bottom:1rem">
+      <input type="text" id="busca-produto" placeholder="Buscar sabor ou tamanho..."
+             oninput="filtrarProdutos(this.value)"
+             style="width:100%;padding-right:2.5rem">
+      <button id="btn-limpar-busca" onclick="limparBusca()"
+              style="display:none;position:absolute;right:0.6rem;top:50%;transform:translateY(-50%);background:none;border:none;cursor:pointer;color:var(--gray-500);font-size:1.2rem;line-height:1;padding:0.2rem">&#215;</button>
     </div>
     <div class="table-wrap" id="produtos-wrap"></div>
   </div>
@@ -620,6 +627,7 @@ let config = { extraAssada: 2, estoqueMinGlobal: 5 };
 let currentTab = 'dashboard';
 let tipoVenda = 'Congelada';
 let paymentRows = [{ method: 'Dinheiro', value: '' }];
+let produtosQuery = '';
 let histFilter = 'todos';
 
 // ===================== INIT =====================
@@ -1221,9 +1229,32 @@ function confirmarVenda() {
 }
 
 // ===================== PRODUTOS & ESTOQUE =====================
+function filtrarProdutos(q) {
+  produtosQuery = q.trim().toLowerCase();
+  document.getElementById('btn-limpar-busca').style.display = produtosQuery ? '' : 'none';
+  renderProdutos();
+}
+
+function limparBusca() {
+  produtosQuery = '';
+  const input = document.getElementById('busca-produto');
+  if (input) input.value = '';
+  document.getElementById('btn-limpar-busca').style.display = 'none';
+  renderProdutos();
+}
+
 function renderProdutos() {
   if (state.cardapio.length === 0) {
     document.getElementById('produtos-wrap').innerHTML = '<div class="empty-state"><i class="ti ti-pizza-off"></i><p>Nenhuma pizza cadastrada ainda</p></div>';
+    return;
+  }
+
+  const items = produtosQuery
+    ? state.cardapio.filter(i => (i.sabor + ' ' + i.tamanho).toLowerCase().includes(produtosQuery))
+    : state.cardapio;
+
+  if (items.length === 0) {
+    document.getElementById('produtos-wrap').innerHTML = '<div class="empty-state"><i class="ti ti-search-off"></i><p>Nenhuma pizza encontrada</p></div>';
     return;
   }
 
@@ -1232,7 +1263,7 @@ function renderProdutos() {
       <thead><tr>
         <th>Sabor</th><th>Tamanho</th><th class="hide-mobile">Custo</th><th>Congelada</th><th>Assada</th><th>Estoque</th><th>Mín.</th><th>Status</th><th>Ações</th>
       </tr></thead>
-      <tbody>${state.cardapio.map(item => {
+      <tbody>${items.map(item => {
         const qty = state.estoque[item.id] || 0;
         const min = item.estoqueMin !== undefined ? item.estoqueMin : config.estoqueMinGlobal;
         let status, badgeClass;
