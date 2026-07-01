@@ -745,7 +745,7 @@ async function init() {
   if (session) {
     const userId = JSON.parse(session).id;
     const { data: user } = await db.from('usuarios').select('*').eq('id', userId).single();
-    if (user) { loginUser(user); return; }
+    if (user) { await loginUser(user); return; }
   }
 }
 
@@ -758,20 +758,24 @@ async function doLogin() {
   const { data, error } = await db.from('usuarios').select('*').eq('usuario', usuario).eq('senha', senha).single();
   if (error || !data) { errEl.textContent = 'Usuário ou senha incorretos.'; return; }
   errEl.textContent = '';
-  loginUser(data);
+  await loginUser(data);
 }
 
-function loginUser(user) {
+async function loginUser(user) {
   currentUser = user;
   sessionStorage.setItem('pz_session', JSON.stringify({ id: user.id }));
   document.getElementById('login-screen').style.display = 'none';
   document.getElementById('header-user').textContent = user.nome;
   setupNavForProfile();
 
+  const hoje = new Date().toISOString().slice(0, 10);
+  const { data: caixasAbertas } = await db.from('caixas')
+    .select('*').eq('status', 'aberto')
+    .gte('abertura', hoje + 'T00:00:00')
+    .order('abertura', { ascending: false });
+
   if (user.perfil === 'funcionario') {
-    const caixas = load(KEYS.caixas) || [];
-    const hoje = new Date().toDateString();
-    const aberto = caixas.find(c => !c.fechamento && c.operadorId === user.id && new Date(c.abertura.timestamp).toDateString() === hoje);
+    const aberto = (caixasAbertas || []).find(c => c.funcionario_id === user.id);
     if (aberto) {
       caixaAtivo = aberto;
       updateTurnoInfo();
@@ -782,10 +786,7 @@ function loginUser(user) {
       document.getElementById('caixa-screen').style.display = 'flex';
     }
   } else {
-    const caixas = load(KEYS.caixas) || [];
-    const hoje = new Date().toDateString();
-    const aberto = caixas.find(c => !c.fechamento && new Date(c.abertura.timestamp).toDateString() === hoje);
-    caixaAtivo = aberto || null;
+    caixaAtivo = (caixasAbertas && caixasAbertas.length > 0) ? caixasAbertas[0] : null;
     if (caixaAtivo) updateTurnoInfo();
     showApp('dashboard');
   }
@@ -833,8 +834,6 @@ function load(key) {
 }
 
 function persist() {
-  localStorage.setItem(KEYS.cardapio, JSON.stringify(state.cardapio));
-  localStorage.setItem(KEYS.estoque, JSON.stringify(state.estoque));
   localStorage.setItem(KEYS.hist, JSON.stringify(state.hist));
 }
 
@@ -876,20 +875,16 @@ function toast(msg, type) {
 }
 
 // ===================== CAIXA =====================
-function confirmarAberturaCaixa() {
+async function confirmarAberturaCaixa() {
   const trocoInicial = parseFloat(document.getElementById('caixa-troco').value) || 0;
-  const novoCaixa = {
-    id: uid(),
-    operadorId: currentUser.id,
-    operadorNome: currentUser.nome,
-    abertura: { timestamp: Date.now(), trocoInicial },
-    fechamento: null,
-    vendaIds: [],
-  };
-  const caixas = load(KEYS.caixas) || [];
-  caixas.push(novoCaixa);
-  persistCaixas(caixas);
-  caixaAtivo = novoCaixa;
+  const { data, error } = await db.from('caixas').insert({
+    funcionario_id: currentUser.id,
+    funcionario_nome: currentUser.nome,
+    troco_inicial: trocoInicial,
+    status: 'aberto',
+  }).select().single();
+  if (error || !data) return toast('Erro ao abrir caixa. Tente novamente.', 'error');
+  caixaAtivo = data;
   updateTurnoInfo();
   document.getElementById('caixa-screen').style.display = 'none';
   showApp('vender');
@@ -901,7 +896,7 @@ function updateTurnoInfo() {
     document.getElementById('btn-fechar-caixa').style.display = 'none';
     return;
   }
-  const horaAbertura = fmtTime(caixaAtivo.abertura.timestamp);
+  const horaAbertura = fmtTime(caixaAtivo.abertura);
   document.getElementById('turno-info').textContent = 'Caixa desde ' + horaAbertura;
   document.getElementById('turno-info').style.display = '';
   if (currentUser && currentUser.perfil === 'funcionario') {
@@ -909,17 +904,17 @@ function updateTurnoInfo() {
   }
 }
 
-function abrirModalFecharCaixa() {
+async function abrirModalFecharCaixa() {
   if (!caixaAtivo) return;
-  const caixas = load(KEYS.caixas) || [];
-  const caixa = caixas.find(c => c.id === caixaAtivo.id) || caixaAtivo;
-  const vendasDoCaixa = state.hist.filter(h => h.tipo === 'venda' && (caixa.vendaIds || []).includes(h.id));
-  const totalVendas = vendasDoCaixa.reduce((a, h) => a + h.total, 0);
-  const totalLucro = vendasDoCaixa.reduce((a, h) => a + h.lucro, 0);
-  const qtdPizzas = vendasDoCaixa.reduce((a, h) => a + h.qtd, 0);
+  const { data: vendas } = await db.from('vendas')
+    .select('total,lucro,quantidade').eq('caixa_id', caixaAtivo.id);
+  const vs = vendas || [];
+  const totalVendas = vs.reduce((a, v) => a + Number(v.total), 0);
+  const totalLucro = vs.reduce((a, v) => a + Number(v.lucro), 0);
+  const qtdPizzas = vs.reduce((a, v) => a + Number(v.quantidade), 0);
   document.getElementById('fechar-caixa-resumo').innerHTML =
-    `<strong>${caixa.operadorNome}</strong> — aberto às ${fmtTime(caixa.abertura.timestamp)}<br>` +
-    `Troco inicial: <strong>${brl(caixa.abertura.trocoInicial)}</strong><br>` +
+    `<strong>${caixaAtivo.funcionario_nome}</strong> — aberto às ${fmtTime(caixaAtivo.abertura)}<br>` +
+    `Troco inicial: <strong>${brl(caixaAtivo.troco_inicial)}</strong><br>` +
     `Pizzas vendidas: <strong>${qtdPizzas}</strong> &nbsp;|&nbsp; ` +
     `Total: <strong>${brl(totalVendas)}</strong> &nbsp;|&nbsp; ` +
     `Lucro: <strong style="color:var(--green-dark)">${brl(totalLucro)}</strong>`;
@@ -928,17 +923,16 @@ function abrirModalFecharCaixa() {
   document.getElementById('modal-fechar-caixa').style.display = 'flex';
 }
 
-function confirmarFechamento() {
+async function confirmarFechamento() {
   if (!caixaAtivo) return;
   const trocoFinal = parseFloat(document.getElementById('fechar-troco').value);
   if (isNaN(trocoFinal) || trocoFinal < 0) return toast('Informe o valor em caixa.', 'error');
-  const obs = document.getElementById('fechar-obs').value.trim();
-  const caixas = load(KEYS.caixas) || [];
-  const idx = caixas.findIndex(c => c.id === caixaAtivo.id);
-  if (idx >= 0) {
-    caixas[idx].fechamento = { timestamp: Date.now(), trocoFinal, obs };
-    persistCaixas(caixas);
-  }
+  const { error } = await db.from('caixas').update({
+    fechamento: new Date().toISOString(),
+    troco_final: trocoFinal,
+    status: 'fechado',
+  }).eq('id', caixaAtivo.id);
+  if (error) return toast('Erro ao fechar caixa.', 'error');
   fecharModal('modal-fechar-caixa');
   toast('Caixa fechado com sucesso!', 'success');
   caixaAtivo = null;
@@ -1367,7 +1361,7 @@ function updateSellSummary() {
   btnEl.disabled = !stockOk || !paymentOk;
 }
 
-function confirmarVenda() {
+async function confirmarVenda() {
   const itemId = document.getElementById('sell-item').value;
   const qty = parseInt(document.getElementById('sell-qty').value) || 0;
   const item = state.cardapio.find(i => i.id === itemId);
@@ -1380,44 +1374,50 @@ function confirmarVenda() {
   const total = preco * qty;
   const lucro = (preco - item.custo) * qty;
 
-  let pagamento;
+  let pagamentosJson;
   if (paymentRows.length > 1) {
     const sumAll = paymentRows.reduce((a, r) => a + (parseFloat(r.value) || 0), 0);
     if (Math.abs(sumAll - total) > 0.01) return toast('Valores não conferem com o total!', 'error');
-    pagamento = paymentRows.map(r => `${r.method} ${brl(parseFloat(r.value) || 0)}`).join(' + ');
+    pagamentosJson = paymentRows.map(r => ({ forma: r.method, valor: parseFloat(r.value) || 0 }));
   } else {
-    pagamento = paymentRows[0].method;
+    pagamentosJson = [{ forma: paymentRows[0].method, valor: total }];
   }
+  const pagamentoStr = pagamentosJson.length > 1
+    ? pagamentosJson.map(p => `${p.forma} ${brl(p.valor)}`).join(' + ')
+    : pagamentosJson[0].forma;
 
-  state.estoque[itemId] = (state.estoque[itemId] || 0) - qty;
+  const btnEl = document.getElementById('btn-confirmar-venda');
+  btnEl.disabled = true;
 
-  const vendaId = uid();
-  state.hist.push({
-    id: vendaId,
-    tipo: 'venda',
-    timestamp: Date.now(),
-    itemId,
+  const { error: errVenda } = await db.from('vendas').insert({
+    caixa_id: caixaAtivo ? caixaAtivo.id : null,
     sabor: item.sabor,
     tamanho: item.tamanho,
-    tipoVenda,
-    qtd: qty,
-    pagamento,
-    precoUnit: preco,
+    cardapio_id: Number(itemId),
+    tipo: tipoVenda,
+    quantidade: qty,
+    preco_unit: preco,
     total,
     lucro,
+    pagamentos: pagamentosJson,
+  });
+  if (errVenda) { btnEl.disabled = false; return toast('Erro ao registrar venda.', 'error'); }
+
+  await db.from('estoque').update({ quantidade: (state.estoque[itemId] || 0) - qty }).eq('cardapio_id', Number(itemId));
+  await db.from('historico').insert({
+    tipo: 'venda',
+    descricao: `${qty}x ${itemLabel(item)} (${tipoVenda}) — ${pagamentoStr}`,
+    dados: { sabor: item.sabor, tamanho: item.tamanho, tipoVenda, qtd: qty, pagamentos: pagamentosJson, precoUnit: preco, total, lucro },
   });
 
-  if (caixaAtivo) {
-    const caixas = load(KEYS.caixas) || [];
-    const idx = caixas.findIndex(c => c.id === caixaAtivo.id);
-    if (idx >= 0) {
-      caixas[idx].vendaIds = [...(caixas[idx].vendaIds || []), vendaId];
-      caixaAtivo = caixas[idx];
-      persistCaixas(caixas);
-    }
-  }
+  state.hist.push({
+    id: uid(), tipo: 'venda', timestamp: Date.now(), itemId,
+    sabor: item.sabor, tamanho: item.tamanho, tipoVenda, qtd: qty,
+    pagamento: pagamentoStr, precoUnit: preco, total, lucro,
+  });
+  localStorage.setItem(KEYS.hist, JSON.stringify(state.hist));
 
-  persist();
+  await carregarCardapio();
   toast(`Venda registrada! ${qty}x ${itemLabel(item)} — ${brl(total)}`, 'success');
   document.getElementById('sell-qty').value = 1;
   paymentRows = [{ method: 'Dinheiro', value: '' }];
@@ -1502,25 +1502,28 @@ function abrirModalEntrada(id) {
   document.getElementById('modal-entrada').style.display = 'flex';
 }
 
-function confirmarEntrada() {
+async function confirmarEntrada() {
   const itemId = document.getElementById('entrada-item-id').value;
   const qty = parseInt(document.getElementById('entrada-qty').value) || 0;
   if (qty <= 0) return toast('Informe uma quantidade válida.', 'error');
   const item = state.cardapio.find(i => i.id === itemId);
   if (!item) return;
 
-  state.estoque[itemId] = (state.estoque[itemId] || 0) + qty;
-  state.hist.push({
-    id: uid(),
+  const novaQty = (state.estoque[itemId] || 0) + qty;
+  await db.from('estoque').update({ quantidade: novaQty }).eq('cardapio_id', Number(itemId));
+  await db.from('historico').insert({
     tipo: 'entrada',
-    timestamp: Date.now(),
-    itemId,
-    sabor: item.sabor,
-    tamanho: item.tamanho,
-    qtd: qty,
+    descricao: `Entrada de ${qty} un. de ${itemLabel(item)}`,
+    dados: { itemId, sabor: item.sabor, tamanho: item.tamanho, qtd: qty },
   });
 
-  persist();
+  state.hist.push({
+    id: uid(), tipo: 'entrada', timestamp: Date.now(), itemId,
+    sabor: item.sabor, tamanho: item.tamanho, qtd: qty,
+  });
+  localStorage.setItem(KEYS.hist, JSON.stringify(state.hist));
+
+  await carregarCardapio();
   fecharModal('modal-entrada');
   toast(`Entrada de ${qty} un. de ${itemLabel(item)} registrada!`, 'success');
   renderProdutos();
@@ -1538,7 +1541,7 @@ function abrirModalAjuste(id) {
   document.getElementById('ajuste-qty').focus();
 }
 
-function salvarAjuste() {
+async function salvarAjuste() {
   const itemId = document.getElementById('ajuste-item-id').value;
   const novaQty = parseInt(document.getElementById('ajuste-qty').value);
   const motivo = document.getElementById('ajuste-motivo').value;
@@ -1546,19 +1549,21 @@ function salvarAjuste() {
   const item = state.cardapio.find(i => i.id === itemId);
   if (!item) return;
   const qtdAnterior = state.estoque[itemId] || 0;
-  state.estoque[itemId] = novaQty;
-  state.hist.push({
-    id: uid(),
+
+  await db.from('estoque').update({ quantidade: novaQty }).eq('cardapio_id', Number(itemId));
+  await db.from('historico').insert({
     tipo: 'ajuste',
-    timestamp: Date.now(),
-    itemId,
-    sabor: item.sabor,
-    tamanho: item.tamanho,
-    qtdAnterior,
-    qtd: novaQty,
-    motivo,
+    descricao: `Ajuste: ${itemLabel(item)} — ${qtdAnterior} → ${novaQty} (${motivo})`,
+    dados: { itemId, sabor: item.sabor, tamanho: item.tamanho, qtdAnterior, qtd: novaQty, motivo },
   });
-  persist();
+
+  state.hist.push({
+    id: uid(), tipo: 'ajuste', timestamp: Date.now(), itemId,
+    sabor: item.sabor, tamanho: item.tamanho, qtdAnterior, qtd: novaQty, motivo,
+  });
+  localStorage.setItem(KEYS.hist, JSON.stringify(state.hist));
+
+  await carregarCardapio();
   fecharModal('modal-ajuste');
   toast(`Estoque de ${itemLabel(item)} ajustado: ${qtdAnterior} → ${novaQty} un.`, 'success');
   renderProdutos();
