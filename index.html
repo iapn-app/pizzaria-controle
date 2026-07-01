@@ -124,6 +124,8 @@
       margin-bottom: 0.4rem;
     }
     .kpi-card .value { font-size: 1.75rem; font-weight: 700; }
+    .kpi-card { border: 1px solid rgba(204,0,0,0.12); box-shadow: 0 0 18px rgba(204,0,0,0.10); transition: all 0.2s ease; }
+    .kpi-card:hover { transform: scale(1.03); box-shadow: 0 0 28px rgba(204,0,0,0.22); }
     /* ALERTS */
     .alert {
       background: #fff3cd;
@@ -909,6 +911,7 @@ function renderDashboard() {
   const totalLucro = vendasHoje.reduce((a, h) => a + h.lucro, 0);
   const totalPizzas = vendasHoje.reduce((a, h) => a + h.qtd, 0);
   const margem = totalVendas > 0 ? Math.round((totalLucro / totalVendas) * 100) : 0;
+  const baixos = state.cardapio.filter(item => (state.estoque[item.id] || 0) <= (item.estoqueMin || config.estoqueMinGlobal));
 
   document.getElementById('kpi-grid').innerHTML = `
     <div class="card kpi-card">
@@ -931,10 +934,15 @@ function renderDashboard() {
       <div class="label">Margem Média</div>
       <div class="value">${margem}%</div>
     </div>
+    <div class="card kpi-card">
+      <div class="icon"><i class="ti ti-alert-triangle"></i></div>
+      <div class="label">Estoque Baixo</div>
+      <div class="value" style="color:${baixos.length > 0 ? 'var(--red)' : 'var(--green)'}">${baixos.length}</div>
+      <div style="margin-top:0.35rem">${baixos.length > 0 ? '<span class="badge badge-red">Reposição urgente</span>' : '<span class="badge badge-green">Tudo OK</span>'}</div>
+    </div>
   `;
 
   // Alertas de estoque mínimo por item
-  const baixos = state.cardapio.filter(item => (state.estoque[item.id] || 0) <= (item.estoqueMin || config.estoqueMinGlobal));
   const alertsEl = document.getElementById('alerts-container');
   alertsEl.innerHTML = '';
   if (baixos.length > 0) {
