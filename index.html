@@ -323,10 +323,6 @@
     }
     /* SELL WARNING */
     .sell-warning { color: #dc3545; font-size: 0.83rem; margin-bottom: 0.75rem; padding: 0.5rem 0.75rem; background: #f8d7da; border-radius: var(--radius); }
-    /* SPLIT PAYMENT */
-    .split-row { display: grid; grid-template-columns: 1fr 110px; gap: 0.5rem; align-items: center; }
-    .split-check-label { display: flex; align-items: center; gap: 0.4rem; font-size: 0.78rem; font-weight: 600; color: var(--gray-700); cursor: pointer; margin-bottom: 0; }
-    .split-check-label input[type="checkbox"] { width: auto; cursor: pointer; accent-color: var(--red); }
     /* CAIXA SCREEN */
     #caixa-screen { position: fixed; inset: 0; z-index: 9998; background: var(--black); display: none; align-items: center; justify-content: center; padding: 1rem; }
     #turno-info { font-size: 0.75rem; color: rgba(255,255,255,0.6); border-left: 1px solid rgba(255,255,255,0.2); padding-left: 0.75rem; margin-left: 0.1rem; white-space: nowrap; }
@@ -453,44 +449,9 @@
         <input type="number" id="sell-qty" value="1" min="1" max="999">
       </div>
       <div class="form-group">
-        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:0.5rem">
-          <label style="margin-bottom:0">Forma de Pagamento</label>
-          <label class="split-check-label">
-            <input type="checkbox" id="split-payment-check" onchange="toggleSplitPayment()">
-            Dividir pagamento
-          </label>
-        </div>
-        <div id="payment-simple">
-          <select id="sell-payment">
-            <option value="Dinheiro">&#128181; Dinheiro</option>
-            <option value="Pix">&#128241; Pix</option>
-            <option value="Cartão Débito">&#128179; Cartão Débito</option>
-            <option value="Cartão Crédito">&#128179; Cartão Crédito</option>
-          </select>
-        </div>
-        <div id="payment-split" style="display:none">
-          <div class="split-row">
-            <select id="sell-pgto1">
-              <option value="Dinheiro">&#128181; Dinheiro</option>
-              <option value="Pix">&#128241; Pix</option>
-              <option value="Cartão Débito">&#128179; Cartão Débito</option>
-              <option value="Cartão Crédito">&#128179; Cartão Crédito</option>
-            </select>
-            <input type="number" id="sell-val1" step="0.01" min="0" placeholder="0,00">
-          </div>
-          <div class="split-row" style="margin-top:0.5rem">
-            <select id="sell-pgto2">
-              <option value="Pix">&#128241; Pix</option>
-              <option value="Dinheiro">&#128181; Dinheiro</option>
-              <option value="Cartão Débito">&#128179; Cartão Débito</option>
-              <option value="Cartão Crédito">&#128179; Cartão Crédito</option>
-            </select>
-            <input type="number" id="sell-val2" step="0.01" min="0" placeholder="0,00" readonly style="background:var(--gray-50);color:var(--gray-600)">
-          </div>
-          <div id="split-warn" style="display:none;color:#dc3545;font-size:0.8rem;margin-top:0.5rem">
-            &#9888;&#65039; Valores não conferem com o total
-          </div>
-        </div>
+        <label>Forma de Pagamento</label>
+        <div id="payment-rows"></div>
+        <div id="split-warn" style="display:none;color:#dc3545;font-size:0.8rem;margin-top:0.5rem">&#9888;&#65039; Valores não conferem com o total</div>
       </div>
       <div id="sell-summary" style="display:none"></div>
       <div id="sell-warning" class="sell-warning" style="display:none"></div>
@@ -638,6 +599,7 @@ let caixaAtivo = null;
 let config = { extraAssada: 2, estoqueMinGlobal: 5 };
 let currentTab = 'dashboard';
 let tipoVenda = 'Congelada';
+let paymentRows = [{ method: 'Dinheiro', value: '' }];
 let histFilter = 'todos';
 
 // ===================== INIT =====================
@@ -1022,25 +984,104 @@ function renderVender() {
     `<option value="${item.id}">${itemLabel(item)} &nbsp;—&nbsp; Estoque: ${state.estoque[item.id] || 0} un.</option>`
   ).join('') || '<option value="">Nenhum item cadastrado</option>';
   if (prev && sel.querySelector(`option[value="${prev}"]`)) sel.value = prev;
+  renderPaymentRows(getCurrentTotal());
   updateSellSummary();
 }
 
 function bindSellListeners() {
   document.getElementById('sell-item').addEventListener('change', updateSellSummary);
   document.getElementById('sell-qty').addEventListener('input', updateSellSummary);
-  document.getElementById('sell-val1').addEventListener('input', updateSellSummary);
 }
 
-function toggleSplitPayment() {
-  const isSplit = document.getElementById('split-payment-check').checked;
-  document.getElementById('payment-simple').style.display = isSplit ? 'none' : 'block';
-  document.getElementById('payment-split').style.display = isSplit ? 'block' : 'none';
-  if (isSplit) {
-    document.getElementById('sell-val1').value = '';
-    document.getElementById('sell-val2').value = '';
-    document.getElementById('split-warn').style.display = 'none';
-  }
+function addPaymentRow() {
+  paymentRows.push({ method: 'Pix', value: '' });
+  renderPaymentRows(getCurrentTotal());
   updateSellSummary();
+}
+
+function removePaymentRow(idx) {
+  paymentRows.splice(idx, 1);
+  renderPaymentRows(getCurrentTotal());
+  updateSellSummary();
+}
+
+function updatePaymentMethod(idx, value) {
+  paymentRows[idx].method = value;
+}
+
+function updatePaymentValue(idx, value) {
+  paymentRows[idx].value = value;
+  const total = getCurrentTotal();
+  refreshLastPaymentRow(total);
+  validatePayment(total);
+}
+
+function getCurrentTotal() {
+  const itemId = document.getElementById('sell-item').value;
+  const qty = parseInt(document.getElementById('sell-qty').value) || 0;
+  const item = state.cardapio.find(i => i.id === itemId);
+  if (!item || qty < 1) return 0;
+  return (tipoVenda === 'Assada' ? item.precoAssada : item.precoCongelada) * qty;
+}
+
+function refreshLastPaymentRow(total) {
+  if (paymentRows.length <= 1) return;
+  let sumOthers = 0;
+  for (let i = 0; i < paymentRows.length - 1; i++) sumOthers += parseFloat(paymentRows[i].value) || 0;
+  const remainder = Math.max(0, parseFloat((total - sumOthers).toFixed(2)));
+  paymentRows[paymentRows.length - 1].value = remainder.toFixed(2);
+  const lastInput = document.querySelector('#payment-rows input[readonly]');
+  if (lastInput) lastInput.value = remainder.toFixed(2);
+}
+
+function validatePayment(total) {
+  const warnEl = document.getElementById('split-warn');
+  const btnEl = document.getElementById('btn-confirmar-venda');
+  if (paymentRows.length <= 1) { warnEl.style.display = 'none'; return true; }
+  const sumAll = paymentRows.reduce((a, r) => a + (parseFloat(r.value) || 0), 0);
+  const ok = total > 0 && Math.abs(sumAll - total) <= 0.01;
+  warnEl.style.display = ok ? 'none' : 'block';
+  if (!ok && btnEl) btnEl.disabled = true;
+  return ok;
+}
+
+function renderPaymentRows(total) {
+  const container = document.getElementById('payment-rows');
+  if (!container) return;
+  const multi = paymentRows.length > 1;
+
+  if (multi && total > 0) {
+    let sumOthers = 0;
+    for (let i = 0; i < paymentRows.length - 1; i++) sumOthers += parseFloat(paymentRows[i].value) || 0;
+    paymentRows[paymentRows.length - 1].value = Math.max(0, parseFloat((total - sumOthers).toFixed(2))).toFixed(2);
+  }
+
+  const makeSelect = (idx, selected) => {
+    const opts = [['Dinheiro','&#128181; Dinheiro'],['Pix','&#128241; Pix'],['Cartão Débito','&#128179; Cartão Débito'],['Cartão Crédito','&#128179; Cartão Crédito']]
+      .map(([v, l]) => `<option value="${v}"${v === selected ? ' selected' : ''}>${l}</option>`).join('');
+    return `<select style="flex:1.2;min-width:0" onchange="updatePaymentMethod(${idx}, this.value)">${opts}</select>`;
+  };
+
+  if (!multi) {
+    container.innerHTML =
+      `<div style="display:flex;gap:0.5rem;align-items:center">
+        ${makeSelect(0, paymentRows[0].method)}
+        <button type="button" class="btn btn-secondary btn-sm" onclick="addPaymentRow()" title="Adicionar forma" style="flex-shrink:0;padding:0.5rem 0.8rem;font-size:1.1rem;line-height:1">+</button>
+      </div>`;
+    return;
+  }
+
+  container.innerHTML = paymentRows.map((row, idx) => {
+    const isLast = idx === paymentRows.length - 1;
+    const valueField = isLast
+      ? `<input type="number" step="0.01" min="0" value="${row.value}" readonly style="flex:1;min-width:70px;background:var(--gray-50);color:var(--gray-600)" placeholder="0,00">`
+      : `<input type="number" step="0.01" min="0" value="${row.value || ''}" style="flex:1;min-width:70px" placeholder="0,00" oninput="updatePaymentValue(${idx}, this.value)">`;
+    const removeBtn = idx > 0
+      ? `<button type="button" class="btn btn-danger btn-sm" onclick="removePaymentRow(${idx})" style="flex-shrink:0;padding:0.35rem 0.65rem">&#215;</button>`
+      : '';
+    return `<div style="display:flex;gap:0.5rem;align-items:center;margin-bottom:0.4rem">${makeSelect(idx, row.method)}${valueField}${removeBtn}</div>`;
+  }).join('') +
+    `<button type="button" class="btn btn-secondary btn-sm" onclick="addPaymentRow()" style="margin-top:0.15rem">+ Adicionar forma</button>`;
 }
 
 function setTipo(tipo) {
@@ -1078,14 +1119,7 @@ function updateSellSummary() {
       <div class="summary-row total"><span>Total:</span><span>${brl(total)}</span></div>
     </div>`;
 
-  // Auto-fill split remainder
-  const isSplit = document.getElementById('split-payment-check').checked;
-  if (isSplit) {
-    const val1 = parseFloat(document.getElementById('sell-val1').value) || 0;
-    const remainder = parseFloat(Math.max(0, total - val1).toFixed(2));
-    document.getElementById('sell-val2').value = remainder.toFixed(2);
-    document.getElementById('split-warn').style.display = val1 > total ? 'block' : 'none';
-  }
+  refreshLastPaymentRow(total);
 
   // Stock validation
   let stockOk = true;
@@ -1101,13 +1135,7 @@ function updateSellSummary() {
     warnEl.style.display = 'none';
   }
 
-  // Split payment validation
-  let paymentOk = true;
-  if (isSplit) {
-    const val1 = parseFloat(document.getElementById('sell-val1').value) || 0;
-    paymentOk = val1 > 0 && val1 <= total;
-  }
-
+  const paymentOk = validatePayment(total);
   btnEl.disabled = !stockOk || !paymentOk;
 }
 
@@ -1124,18 +1152,13 @@ function confirmarVenda() {
   const total = preco * qty;
   const lucro = (preco - item.custo) * qty;
 
-  const isSplit = document.getElementById('split-payment-check').checked;
   let pagamento;
-  if (isSplit) {
-    const pgto1 = document.getElementById('sell-pgto1').value;
-    const val1 = parseFloat(document.getElementById('sell-val1').value) || 0;
-    const pgto2 = document.getElementById('sell-pgto2').value;
-    const val2 = parseFloat(document.getElementById('sell-val2').value) || 0;
-    if (val1 <= 0) return toast('Informe o valor do primeiro pagamento.', 'error');
-    if (Math.abs(val1 + val2 - total) > 0.01) return toast('Valores não conferem com o total!', 'error');
-    pagamento = `${pgto1} ${brl(val1)} + ${pgto2} ${brl(val2)}`;
+  if (paymentRows.length > 1) {
+    const sumAll = paymentRows.reduce((a, r) => a + (parseFloat(r.value) || 0), 0);
+    if (Math.abs(sumAll - total) > 0.01) return toast('Valores não conferem com o total!', 'error');
+    pagamento = paymentRows.map(r => `${r.method} ${brl(parseFloat(r.value) || 0)}`).join(' + ');
   } else {
-    pagamento = document.getElementById('sell-payment').value;
+    pagamento = paymentRows[0].method;
   }
 
   state.estoque[itemId] = (state.estoque[itemId] || 0) - qty;
@@ -1169,10 +1192,7 @@ function confirmarVenda() {
   persist();
   toast(`Venda registrada! ${qty}x ${itemLabel(item)} — ${brl(total)}`, 'success');
   document.getElementById('sell-qty').value = 1;
-  if (isSplit) {
-    document.getElementById('sell-val1').value = '';
-    document.getElementById('sell-val2').value = '';
-  }
+  paymentRows = [{ method: 'Dinheiro', value: '' }];
   renderVender();
 }
 
