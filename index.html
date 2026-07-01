@@ -5,6 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Pizza dos Cria</title>
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@latest/tabler-icons.min.css">
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <style>
     :root {
       --red: #CC0000;
@@ -684,6 +685,10 @@
 // ===================== STATE =====================
 const KEYS = { cardapio: 'pz_cardapio', estoque: 'pz_estoque', hist: 'pz_hist', usuarios: 'pz_usuarios', caixas: 'pz_caixas', config: 'pz_config' };
 
+const SUPA_URL = 'https://fhgvluopiogtusjmwiro.supabase.co';
+const SUPA_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImZoZ3ZsdW9waW9ndHVzam13aXJvIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODI4OTA3MzgsImV4cCI6MjA5ODQ2NjczOH0.FYnlqFHWkgeS8r4zkJiwvqvNKp8jO7o0f5Id54-iIfU';
+const db = window.supabase.createClient(SUPA_URL, SUPA_KEY);
+
 let state = { cardapio: [], estoque: {}, hist: [] };
 let currentUser = null;
 let caixaAtivo = null;
@@ -698,35 +703,31 @@ let dashStart = '';
 let dashEnd = '';
 
 // ===================== INIT =====================
-function init() {
-  let users = load(KEYS.usuarios);
-  if (!Array.isArray(users)) users = [];
-  if (!users.some(u => u.perfil === 'dono')) {
-    users.unshift({ id: 1, nome: 'Dono', usuario: 'dono', senha: '1234', perfil: 'dono' });
-    localStorage.setItem(KEYS.usuarios, JSON.stringify(users));
-  }
+async function carregarCardapio() {
+  const { data, error } = await db.from('cardapio').select('*, estoque(quantidade)');
+  if (error || !data) { console.error('Erro ao carregar cardápio:', error); return; }
+  state.cardapio = data.map(r => ({
+    id: String(r.id),
+    sabor: r.sabor,
+    tamanho: r.tamanho,
+    custo: Number(r.custo),
+    precoCongelada: Number(r.preco_cong),
+    precoAssada: Number(r.preco_ass),
+    estoqueMin: r.estoque_min,
+  }));
+  state.estoque = {};
+  data.forEach(r => {
+    state.estoque[String(r.id)] = r.estoque && r.estoque.length > 0 ? r.estoque[0].quantidade : 0;
+  });
+}
 
+async function init() {
   const savedConfig = load(KEYS.config);
   if (savedConfig) config = { ...config, ...savedConfig };
 
-  const defaultCardapio = [
-    { id: uid(), sabor: 'Calabresa', tamanho: 'Média', custo: 10, precoCongelada: 15, precoAssada: 17, estoqueMin: 5 },
-    { id: uid(), sabor: 'Mussarela', tamanho: 'Média', custo: 10, precoCongelada: 15, precoAssada: 17, estoqueMin: 5 },
-    { id: uid(), sabor: 'Frango c/ Catupiry', tamanho: 'Média', custo: 12, precoCongelada: 18, precoAssada: 20, estoqueMin: 5 },
-    { id: uid(), sabor: 'Calabresa', tamanho: 'Grande', custo: 16, precoCongelada: 24, precoAssada: 27, estoqueMin: 5 },
-    { id: uid(), sabor: 'Mussarela', tamanho: 'Grande', custo: 16, precoCongelada: 24, precoAssada: 27, estoqueMin: 5 },
-  ];
-
-  state.cardapio = load(KEYS.cardapio) || defaultCardapio;
-  state.estoque = load(KEYS.estoque) || {};
+  await carregarCardapio();
   state.hist = load(KEYS.hist) || [];
 
-  state.cardapio.forEach(item => {
-    if (state.estoque[item.id] === undefined) state.estoque[item.id] = 10;
-    if (item.estoqueMin === undefined) item.estoqueMin = config.estoqueMinGlobal;
-  });
-
-  persist();
   bindNav();
   bindSellListeners();
   bindHistFilters();
@@ -743,21 +744,21 @@ function init() {
   const session = sessionStorage.getItem('pz_session');
   if (session) {
     const userId = JSON.parse(session).id;
-    const user = (load(KEYS.usuarios) || []).find(u => u.id === userId);
+    const { data: user } = await db.from('usuarios').select('*').eq('id', userId).single();
     if (user) { loginUser(user); return; }
   }
 }
 
 // ===================== AUTH =====================
-function doLogin() {
+async function doLogin() {
   const usuario = document.getElementById('login-usuario').value.trim();
   const senha = document.getElementById('login-senha').value;
   const errEl = document.getElementById('login-error');
-  const users = load(KEYS.usuarios) || [];
-  const user = users.find(u => u.usuario === usuario && u.senha === senha);
-  if (!user) { errEl.textContent = 'Usuário ou senha incorretos.'; return; }
+  errEl.textContent = 'Verificando...';
+  const { data, error } = await db.from('usuarios').select('*').eq('usuario', usuario).eq('senha', senha).single();
+  if (error || !data) { errEl.textContent = 'Usuário ou senha incorretos.'; return; }
   errEl.textContent = '';
-  loginUser(user);
+  loginUser(data);
 }
 
 function loginUser(user) {
@@ -1848,7 +1849,7 @@ function bindModalClose() {
 }
 
 // ===================== START =====================
-init();
+init().catch(e => console.error('Erro na inicialização:', e));
 </script>
 </body>
 </html>
