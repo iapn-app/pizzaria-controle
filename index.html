@@ -2101,17 +2101,28 @@ function baixarRelatorioPDF() {
   wrap.querySelectorAll('.badge').forEach(b => {
     b.style.cssText = 'display:inline-block;padding:2px 6px;border-radius:100px;font-size:8px;font-weight:600;background:#d1ecf1;color:#0c5460';
   });
-  wrap.querySelectorAll('.table-wrap').forEach(d => { d.style.cssText = 'border:1px solid #dee2e6;border-radius:4px;overflow:hidden;margin-bottom:4px'; });
+  wrap.querySelectorAll('.table-wrap').forEach(d => { d.style.cssText = 'border:1px solid #dee2e6;border-radius:4px;overflow:hidden;margin-bottom:4px;page-break-inside:avoid;break-inside:avoid'; });
   wrap.querySelectorAll('.report-section-title').forEach(d => { d.style.cssText = 'display:flex;align-items:center;gap:6px;margin-bottom:6px;font-weight:700;font-size:11px'; });
   wrap.querySelectorAll('.report-dot').forEach(d => { d.style.cssText = d.style.cssText + ';display:inline-block'; });
 
-  // Prevent total footer from orphaning onto a blank second page
-  const totalFooter = wrap.querySelector('#reposicao-pdf-content > div:last-child');
-  if (totalFooter) {
-    totalFooter.style.pageBreakInside = 'avoid';
-    totalFooter.style.pageBreakBefore = 'avoid';
-    totalFooter.style.breakInside = 'avoid';
-    totalFooter.style.breakBefore = 'avoid';
+  // Move the grand-total block physically inside the last table-wrap so
+  // html2pdf cannot orphan it onto a blank second page. The total becomes
+  // the last child of the last table box, sharing the same paint boundary.
+  const pdfContent = wrap.querySelector('#reposicao-pdf-content');
+  if (pdfContent) {
+    const allTw = pdfContent.querySelectorAll('.table-wrap');
+    const totalEl = pdfContent.lastElementChild;
+    if (allTw.length && totalEl && !totalEl.classList.contains('table-wrap')) {
+      const lastTw = allTw[allTw.length - 1];
+      totalEl.style.cssText = 'border-top:2px solid #dee2e6;padding:8px 12px;display:flex;justify-content:flex-end;page-break-before:avoid;break-before:avoid;page-break-inside:avoid;break-inside:avoid';
+      lastTw.appendChild(totalEl);
+    }
+    // Prevent a page break after the last section (which now contains the total)
+    const lastSection = pdfContent.lastElementChild;
+    if (lastSection) {
+      lastSection.style.pageBreakAfter = 'avoid';
+      lastSection.style.breakAfter = 'avoid';
+    }
   }
 
   document.body.appendChild(wrap);
@@ -2122,7 +2133,7 @@ function baixarRelatorioPDF() {
     image: { type: 'jpeg', quality: 0.97 },
     html2canvas: { scale: 2, useCORS: true, logging: false },
     jsPDF: { unit: 'mm', format: 'a4', orientation: 'landscape' },
-    pagebreak: { mode: 'avoid-all' },
+    pagebreak: { mode: ['avoid-all', 'css', 'legacy'] },
   }).from(wrap).save().then(() => {
     document.body.removeChild(wrap);
     toast('PDF gerado com sucesso!', 'success');
