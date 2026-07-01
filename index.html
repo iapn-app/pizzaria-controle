@@ -499,7 +499,7 @@
           <label>Tipo de Preparo</label>
           <div class="toggle-group">
             <button class="toggle-btn active" id="btn-tipo-congelada" onclick="setTipo('Congelada')">&#10052; Congelada</button>
-            <button class="toggle-btn" id="btn-tipo-assada" onclick="setTipo('Assada')">&#128293; Assada (+R$2)</button>
+            <button class="toggle-btn" id="btn-tipo-assada" onclick="setTipo('Assada')">&#128293; Assada (+R$4)</button>
           </div>
         </div>
         <div class="form-group">
@@ -743,7 +743,7 @@ const db = window.supabase.createClient(SUPA_URL, SUPA_KEY);
 let state = { cardapio: [], estoque: {}, hist: [] };
 let currentUser = null;
 let caixaAtivo = null;
-let config = { extraAssada: 2, estoqueMinGlobal: 5 };
+let config = { extraAssada: 4, estoqueMinGlobal: 5 };
 let currentTab = 'dashboard';
 let tipoVenda = 'Congelada';
 let paymentRows = [{ method: 'Dinheiro', value: '' }];
