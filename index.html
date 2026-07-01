@@ -699,7 +699,8 @@ let dashEnd = '';
 
 // ===================== INIT =====================
 function init() {
-  let users = load(KEYS.usuarios) || [];
+  let users = load(KEYS.usuarios);
+  if (!Array.isArray(users)) users = [];
   if (!users.some(u => u.perfil === 'dono')) {
     users.unshift({ id: 1, nome: 'Dono', usuario: 'dono', senha: '1234', perfil: 'dono' });
     localStorage.setItem(KEYS.usuarios, JSON.stringify(users));
