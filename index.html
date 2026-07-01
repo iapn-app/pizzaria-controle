@@ -1983,7 +1983,8 @@ async function abrirRelatorioReposicao() {
     const min = item.estoqueMin !== undefined ? item.estoqueMin : config.estoqueMinGlobal;
     const totalVendido15 = vendasMap[Number(item.id)] || 0;
     const mediaDiaria = totalVendido15 / 15;
-    const sugestao = Math.max(0, Math.ceil(mediaDiaria * 15 - qty));
+    const sugestaoBase = Math.max(0, Math.ceil(mediaDiaria * 15 - qty));
+    const sugestao = sugestaoBase > 0 ? sugestaoBase : (qty <= min ? min : 0);
     const custoTotal = sugestao * item.custo;
     const row = { ...item, qty, min, mediaDiaria, sugestao, custoTotal };
     if (qty === 0) semEstoque.push(row);
@@ -2104,6 +2105,15 @@ function baixarRelatorioPDF() {
   wrap.querySelectorAll('.report-section-title').forEach(d => { d.style.cssText = 'display:flex;align-items:center;gap:6px;margin-bottom:6px;font-weight:700;font-size:11px'; });
   wrap.querySelectorAll('.report-dot').forEach(d => { d.style.cssText = d.style.cssText + ';display:inline-block'; });
 
+  // Prevent total footer from orphaning onto a blank second page
+  const totalFooter = wrap.querySelector('#reposicao-pdf-content > div:last-child');
+  if (totalFooter) {
+    totalFooter.style.pageBreakInside = 'avoid';
+    totalFooter.style.pageBreakBefore = 'avoid';
+    totalFooter.style.breakInside = 'avoid';
+    totalFooter.style.breakBefore = 'avoid';
+  }
+
   document.body.appendChild(wrap);
 
   html2pdf().set({
@@ -2112,6 +2122,7 @@ function baixarRelatorioPDF() {
     image: { type: 'jpeg', quality: 0.97 },
     html2canvas: { scale: 2, useCORS: true, logging: false },
     jsPDF: { unit: 'mm', format: 'a4', orientation: 'landscape' },
+    pagebreak: { mode: 'avoid-all' },
   }).from(wrap).save().then(() => {
     document.body.removeChild(wrap);
     toast('PDF gerado com sucesso!', 'success');
