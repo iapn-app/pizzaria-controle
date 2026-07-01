@@ -480,17 +480,19 @@
   <!-- VENDER -->
   <div id="tab-vender" class="tab-content">
     <div class="filters" id="venda-cat-filters" style="margin-bottom:1rem">
-      <button class="filter-btn active" id="vcat-pizza" onclick="setVendaCategoria('pizza',this)">🍕 Pizza</button>
-      <button class="filter-btn" id="vcat-salgado" onclick="setVendaCategoria('salgado',this)">🥟 Salgado</button>
-      <button class="filter-btn" id="vcat-sobremesa" onclick="setVendaCategoria('sobremesa',this)">🍰 Sobremesa</button>
-      <button class="filter-btn" id="vcat-bebida" onclick="setVendaCategoria('bebida',this)">🥤 Bebida</button>
+      <button class="filter-btn active" id="vcat-pizza-salgada" onclick="setVendaCategoria('pizza_salgada',this)">🍕 Pizzas Salgadas</button>
+      <button class="filter-btn" id="vcat-pizza-borda" onclick="setVendaCategoria('pizza_borda',this)">🧀 Pizzas Borda</button>
+      <button class="filter-btn" id="vcat-pizza-doce" onclick="setVendaCategoria('pizza_doce',this)">🍫 Pizzas Doces</button>
+      <button class="filter-btn" id="vcat-salgado" onclick="setVendaCategoria('salgado',this)">🥟 Salgados</button>
+      <button class="filter-btn" id="vcat-sobremesa" onclick="setVendaCategoria('sobremesa',this)">🍰 Sobremesas</button>
+      <button class="filter-btn" id="vcat-bebida" onclick="setVendaCategoria('bebida',this)">🥤 Bebidas</button>
     </div>
     <div class="vender-grid">
       <!-- Coluna esquerda: formulário -->
       <div class="card">
         <div class="section-title" style="margin-bottom:1.25rem"><i class="ti ti-shopping-cart"></i> Registrar Venda</div>
         <div class="form-group">
-          <label>Sabor / Tamanho</label>
+          <label id="sell-item-label">Sabor / Tamanho</label>
           <select id="sell-item"></select>
         </div>
         <div class="form-group" id="tipo-preparo-group">
@@ -541,11 +543,11 @@
       </button>
     </div>
     <div class="filters" id="estoque-cat-filters" style="margin-bottom:1rem">
-      <button class="filter-btn active" id="ecat-todas" onclick="setEstoqueCategoria('todas',this)">Todos</button>
-      <button class="filter-btn" id="ecat-pizza" onclick="setEstoqueCategoria('pizza',this)">🍕 Pizza</button>
-      <button class="filter-btn" id="ecat-salgado" onclick="setEstoqueCategoria('salgado',this)">🥟 Salgado</button>
-      <button class="filter-btn" id="ecat-sobremesa" onclick="setEstoqueCategoria('sobremesa',this)">🍰 Sobremesa</button>
-      <button class="filter-btn" id="ecat-bebida" onclick="setEstoqueCategoria('bebida',this)">🥤 Bebida</button>
+      <button class="filter-btn active" id="ecat-todas" onclick="setEstoqueCategoria('todas',this)">Todas</button>
+      <button class="filter-btn" id="ecat-pizza" onclick="setEstoqueCategoria('pizza',this)">🍕 Pizzas</button>
+      <button class="filter-btn" id="ecat-salgado" onclick="setEstoqueCategoria('salgado',this)">🥟 Salgados</button>
+      <button class="filter-btn" id="ecat-sobremesa" onclick="setEstoqueCategoria('sobremesa',this)">🍰 Sobremesas</button>
+      <button class="filter-btn" id="ecat-bebida" onclick="setEstoqueCategoria('bebida',this)">🥤 Bebidas</button>
     </div>
     <div style="position:relative;margin-bottom:1rem">
       <input type="text" id="busca-produto" placeholder="Buscar sabor ou tamanho..."
@@ -731,6 +733,8 @@
 // ===================== STATE =====================
 const KEYS = { cardapio: 'pz_cardapio', estoque: 'pz_estoque', hist: 'pz_hist', usuarios: 'pz_usuarios', caixas: 'pz_caixas', config: 'pz_config' };
 const CAT_LABELS = { pizza: '🍕 Pizza', salgado: '🥟 Salgado', sobremesa: '🍰 Sobremesa', bebida: '🥤 Bebida' };
+const PIZZA_DOCES = ['chocolate', 'prestígio', 'prestigio', 'romeu e julieta', 'brigadeiro',
+  'banana', 'nutella', 'doce de leite', 'morango', 'churros', 'ovomaltine', 'ninho', 'ferrero', 'cocada'];
 
 const SUPA_URL = 'https://fhgvluopiogtusjmwiro.supabase.co';
 const SUPA_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImZoZ3ZsdW9waW9ndHVzam13aXJvIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODI4OTA3MzgsImV4cCI6MjA5ODQ2NjczOH0.FYnlqFHWkgeS8r4zkJiwvqvNKp8jO7o0f5Id54-iIfU';
@@ -748,7 +752,7 @@ let histFilter = 'todos';
 let dashPeriod = 'hoje';
 let dashStart = '';
 let dashEnd = '';
-let vendaCategoria = 'pizza';
+let vendaCategoria = 'pizza_salgada';
 let estoqueCategoria = 'todas';
 
 // ===================== INIT =====================
@@ -1266,13 +1270,18 @@ async function renderDashboard() {
 function renderVender() {
   const sel = document.getElementById('sell-item');
   const prev = sel.value;
-  const filtered = state.cardapio.filter(i => i.categoria === vendaCategoria);
-  sel.innerHTML = filtered.map(item =>
-    `<option value="${item.id}">${itemLabel(item)} &nbsp;—&nbsp; Estoque: ${state.estoque[item.id] || 0} un.</option>`
-  ).join('') || '<option value="">Nenhum item nesta categoria</option>';
+  const isPizza = vendaCategoria.startsWith('pizza');
+
+  const filtered = state.cardapio.filter(i => getVendaSubcat(i) === vendaCategoria);
+  sel.innerHTML = filtered.map(item => {
+    const label = isPizza ? item.sabor : itemLabel(item);
+    return `<option value="${item.id}">${label} &nbsp;—&nbsp; Estoque: ${state.estoque[item.id] || 0} un.</option>`;
+  }).join('') || '<option value="">Nenhum item nesta categoria</option>';
   if (prev && sel.querySelector(`option[value="${prev}"]`)) sel.value = prev;
 
-  const isPizza = vendaCategoria === 'pizza';
+  const lbl = document.getElementById('sell-item-label');
+  if (lbl) lbl.textContent = isPizza ? 'Sabor' : 'Produto / Tamanho';
+
   const tipoGroup = document.getElementById('tipo-preparo-group');
   if (tipoGroup) tipoGroup.style.display = isPizza ? '' : 'none';
 
@@ -1383,6 +1392,18 @@ function setTipo(tipo) {
   document.getElementById('btn-tipo-congelada').classList.toggle('active', tipo === 'Congelada');
   document.getElementById('btn-tipo-assada').classList.toggle('active', tipo === 'Assada');
   updateSellSummary();
+}
+
+function getPizzaSubcat(sabor) {
+  const s = sabor.toLowerCase();
+  if (s.includes('borda')) return 'pizza_borda';
+  if (PIZZA_DOCES.some(d => s.includes(d))) return 'pizza_doce';
+  return 'pizza_salgada';
+}
+
+function getVendaSubcat(item) {
+  if (item.categoria !== 'pizza') return item.categoria;
+  return getPizzaSubcat(item.sabor);
 }
 
 function setVendaCategoria(cat, btn) {
@@ -1566,13 +1587,17 @@ function renderProdutos() {
         const precos = item.tipoVenda === 'preco_unico'
           ? brl(item.precoCongelada)
           : `${brl(item.precoCongelada)} / ${brl(item.precoAssada)}`;
+        const unidade = item.categoria === 'salgado' ? 'Saco'
+          : item.categoria === 'sobremesa' ? 'Cx'
+          : item.categoria === 'bebida' ? 'Un'
+          : 'Un';
         return `<tr>
           <td><strong>${item.sabor}</strong></td>
           <td>${item.tamanho}</td>
           <td><span class="badge badge-blue" style="font-size:0.7rem">${CAT_LABELS[item.categoria] || item.categoria}</span></td>
           <td class="hide-mobile">${brl(item.custo)}</td>
           <td>${precos}</td>
-          <td><strong>${qty}</strong> <span style="color:var(--gray-500);font-size:0.8rem">un.</span></td>
+          <td><strong>${qty}</strong> <span style="color:var(--gray-500);font-size:0.8rem">${unidade}</span></td>
           <td><input type="number" min="0" value="${min}" style="width:60px;padding:0.25rem 0.4rem;font-size:0.8rem;border:1.5px solid var(--gray-300);border-radius:4px" onchange="salvarEstoqueMin('${item.id}', this.value)"></td>
           <td><span class="badge ${badgeClass}">${status}</span></td>
           <td style="white-space:nowrap">
