@@ -1992,7 +1992,7 @@ async function abrirRelatorioReposicao() {
     else okEstoque.push(row);
   });
 
-  const makeTable = (rows) => {
+  const makeTable = (rows, extraFooterRow = '') => {
     if (rows.length === 0) return '<p style="color:var(--gray-500);font-size:0.875rem;padding:0.4rem 0 0.75rem">Nenhum item nesta situação.</p>';
     const sub = rows.reduce((a, r) => a + r.custoTotal, 0);
     return `<div class="table-wrap" style="margin-bottom:0.25rem">
@@ -2013,16 +2013,27 @@ async function abrirRelatorioReposicao() {
           <td>${brl(r.custo)}</td>
           <td>${r.sugestao > 0 ? '<strong>' + brl(r.custoTotal) + '</strong>' : '—'}</td>
         </tr>`).join('')}</tbody>
-        <tfoot><tr>
-          <td colspan="8" style="text-align:right;padding:0.6rem 1rem">Subtotal estimado:</td>
-          <td style="padding:0.6rem 1rem"><strong>${brl(sub)}</strong></td>
-        </tr></tfoot>
+        <tfoot>
+          <tr>
+            <td colspan="8" style="text-align:right;padding:0.6rem 1rem">Subtotal estimado:</td>
+            <td style="padding:0.6rem 1rem"><strong>${brl(sub)}</strong></td>
+          </tr>
+          ${extraFooterRow}
+        </tfoot>
       </table>
     </div>`;
   };
 
   const totalGeral = [...semEstoque, ...baixoEstoque].reduce((a, r) => a + r.custoTotal, 0);
   const hoje = new Date().toLocaleDateString('pt-BR');
+
+  // Red grand-total row — goes inside the last non-empty section (baixo if it has data, otherwise sem)
+  const grandTotalRow = `<tr style="background:#cc0000;color:white;font-weight:bold">
+    <td colspan="8" style="padding:8px;text-align:right;border:none">CUSTO TOTAL ESTIMADO DE REPOSIÇÃO</td>
+    <td style="padding:8px;text-align:right;border:none">${brl(totalGeral)}</td>
+  </tr>`;
+  const semTableHtml = makeTable(semEstoque, baixoEstoque.length === 0 ? grandTotalRow : '');
+  const baixoTableHtml = makeTable(baixoEstoque, grandTotalRow);
 
   document.getElementById('reposicao-content').innerHTML = `
     <div id="reposicao-pdf-content">
@@ -2036,7 +2047,7 @@ async function abrirRelatorioReposicao() {
           <span class="report-dot" style="background:#dc3545"></span>
           <span style="color:#dc3545">Sem Estoque (${semEstoque.length})</span>
         </div>
-        ${makeTable(semEstoque)}
+        ${semTableHtml}
       </div>
 
       <div style="margin-bottom:1.5rem">
@@ -2044,7 +2055,7 @@ async function abrirRelatorioReposicao() {
           <span class="report-dot" style="background:#f39c12"></span>
           <span style="color:#f39c12">Estoque Baixo (${baixoEstoque.length})</span>
         </div>
-        ${makeTable(baixoEstoque)}
+        ${baixoTableHtml}
       </div>
 
       <div style="margin-bottom:1.5rem">
@@ -2053,14 +2064,6 @@ async function abrirRelatorioReposicao() {
           <span style="color:#27ae60">OK — Sem necessidade de reposição (${okEstoque.length})</span>
         </div>
         ${makeTable(okEstoque)}
-      </div>
-
-      <div style="border-top:2px solid var(--gray-200);padding-top:1rem;display:flex;justify-content:flex-end">
-        <div style="text-align:right">
-          <div style="font-size:0.75rem;text-transform:uppercase;letter-spacing:0.8px;color:var(--gray-600);margin-bottom:0.3rem">Custo Total Estimado de Reposição</div>
-          <div style="font-size:1.6rem;font-weight:800;color:var(--red)">${brl(totalGeral)}</div>
-          <div style="font-size:0.75rem;color:var(--gray-500);margin-top:0.2rem">(itens sem estoque + estoque baixo)</div>
-        </div>
       </div>
     </div>`;
 }
@@ -2096,6 +2099,7 @@ function baixarRelatorioPDF() {
     td.style.cssText = 'padding:4px 7px;border:1px solid #dee2e6;vertical-align:middle';
   });
   wrap.querySelectorAll('tfoot td').forEach(td => {
+    if (td.parentElement.style.background) return; // preserve the red grand-total row
     td.style.cssText = 'padding:5px 7px;border:1px solid #dee2e6;background:#f8f9fa;font-weight:700';
   });
   wrap.querySelectorAll('.badge').forEach(b => {
@@ -2104,26 +2108,6 @@ function baixarRelatorioPDF() {
   wrap.querySelectorAll('.table-wrap').forEach(d => { d.style.cssText = 'border:1px solid #dee2e6;border-radius:4px;overflow:hidden;margin-bottom:4px;page-break-inside:avoid;break-inside:avoid'; });
   wrap.querySelectorAll('.report-section-title').forEach(d => { d.style.cssText = 'display:flex;align-items:center;gap:6px;margin-bottom:6px;font-weight:700;font-size:11px'; });
   wrap.querySelectorAll('.report-dot').forEach(d => { d.style.cssText = d.style.cssText + ';display:inline-block'; });
-
-  // Move the grand-total block physically inside the last table-wrap so
-  // html2pdf cannot orphan it onto a blank second page. The total becomes
-  // the last child of the last table box, sharing the same paint boundary.
-  const pdfContent = wrap.querySelector('#reposicao-pdf-content');
-  if (pdfContent) {
-    const allTw = pdfContent.querySelectorAll('.table-wrap');
-    const totalEl = pdfContent.lastElementChild;
-    if (allTw.length && totalEl && !totalEl.classList.contains('table-wrap')) {
-      const lastTw = allTw[allTw.length - 1];
-      totalEl.style.cssText = 'border-top:2px solid #dee2e6;padding:8px 12px;display:flex;justify-content:flex-end;page-break-before:avoid;break-before:avoid;page-break-inside:avoid;break-inside:avoid';
-      lastTw.appendChild(totalEl);
-    }
-    // Prevent a page break after the last section (which now contains the total)
-    const lastSection = pdfContent.lastElementChild;
-    if (lastSection) {
-      lastSection.style.pageBreakAfter = 'avoid';
-      lastSection.style.breakAfter = 'avoid';
-    }
-  }
 
   document.body.appendChild(wrap);
 
