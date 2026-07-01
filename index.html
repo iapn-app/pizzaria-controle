@@ -726,8 +726,6 @@ async function init() {
   if (savedConfig) config = { ...config, ...savedConfig };
 
   await carregarCardapio();
-  state.hist = load(KEYS.hist) || [];
-
   bindNav();
   bindSellListeners();
   bindHistFilters();
@@ -833,9 +831,7 @@ function load(key) {
   try { return JSON.parse(localStorage.getItem(key)); } catch { return null; }
 }
 
-function persist() {
-  localStorage.setItem(KEYS.hist, JSON.stringify(state.hist));
-}
+function persist() {}
 
 function persistConfig() {
   localStorage.setItem(KEYS.config, JSON.stringify(config));
@@ -855,6 +851,12 @@ function fmtTime(ts) {
 
 function fmtDateTime(ts) {
   return new Date(ts).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' });
+}
+
+function fmtPagamento(pagamentos) {
+  if (!pagamentos || !pagamentos.length) return '—';
+  if (pagamentos.length === 1) return pagamentos[0].forma;
+  return pagamentos.map(p => `${p.forma} ${brl(p.valor)}`).join(' + ');
 }
 
 function isToday(ts) {
@@ -1053,12 +1055,23 @@ function bindImportFile() {
 }
 
 // ===================== DASHBOARD =====================
-function renderDashboard() {
+async function renderDashboard() {
   const { start, end } = getDashPeriodRange();
-  const vendasHoje = state.hist.filter(h => h.tipo === 'venda' && h.timestamp >= start && h.timestamp <= end);
-  const totalVendas = vendasHoje.reduce((a, h) => a + h.total, 0);
-  const totalLucro = vendasHoje.reduce((a, h) => a + h.lucro, 0);
-  const totalPizzas = vendasHoje.reduce((a, h) => a + h.qtd, 0);
+  const startISO = new Date(start).toISOString();
+  const endISO = new Date(end).toISOString();
+  const hojeISO = new Date().toISOString().slice(0, 10);
+
+  const [{ data: vendasData }, { data: caixasData }, { data: vendasHojeData }] = await Promise.all([
+    db.from('vendas').select('sabor,tamanho,tipo,quantidade,total,lucro,pagamentos,created_at,caixa_id')
+      .gte('created_at', startISO).lte('created_at', endISO),
+    db.from('caixas').select('*').gte('abertura', hojeISO + 'T00:00:00'),
+    db.from('vendas').select('caixa_id,total,lucro,quantidade').gte('created_at', hojeISO + 'T00:00:00'),
+  ]);
+
+  const vendas = vendasData || [];
+  const totalVendas = vendas.reduce((a, v) => a + Number(v.total), 0);
+  const totalLucro = vendas.reduce((a, v) => a + Number(v.lucro), 0);
+  const totalPizzas = vendas.reduce((a, v) => a + Number(v.quantidade), 0);
   const margem = totalVendas > 0 ? Math.round((totalLucro / totalVendas) * 100) : 0;
   const baixos = state.cardapio.filter(item => (state.estoque[item.id] || 0) <= (item.estoqueMin || config.estoqueMinGlobal));
 
@@ -1091,7 +1104,6 @@ function renderDashboard() {
     </div>
   `;
 
-  // Alertas de estoque mínimo por item
   const alertsEl = document.getElementById('alerts-container');
   alertsEl.innerHTML = '';
   if (baixos.length > 0) {
@@ -1103,8 +1115,7 @@ function renderDashboard() {
     alertsEl.innerHTML = `<div class="alert danger"><i class="ti ti-alert-triangle"></i><div>${msg}</div></div>`;
   }
 
-  // Tabela de vendas do período
-  const sorted = [...vendasHoje].sort((a, b) => b.timestamp - a.timestamp);
+  const sorted = [...vendas].sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
   document.getElementById('vendas-hoje-table').innerHTML = sorted.length === 0
     ? `<div class="empty-state"><i class="ti ti-receipt-off"></i><p>Nenhuma venda no período</p></div>`
     : `<table>
@@ -1112,25 +1123,24 @@ function renderDashboard() {
           <th>Data/Hora</th><th>Sabor</th><th>Tamanho</th><th>Tipo</th><th>Qtd</th><th>Pagamento</th><th>Total</th><th>Lucro</th>
         </tr></thead>
         <tbody>${sorted.map(v => `<tr>
-          <td style="font-size:0.8rem">${dashPeriod === 'hoje' ? fmtTime(v.timestamp) : fmtDateTime(v.timestamp)}</td>
+          <td style="font-size:0.8rem">${dashPeriod === 'hoje' ? fmtTime(v.created_at) : fmtDateTime(v.created_at)}</td>
           <td>${v.sabor}</td>
           <td>${v.tamanho}</td>
-          <td><span class="badge ${v.tipoVenda === 'Assada' ? 'badge-red' : 'badge-blue'}">${v.tipoVenda}</span></td>
-          <td><strong>${v.qtd}</strong></td>
-          <td><span class="badge badge-gray">${v.pagamento}</span></td>
+          <td><span class="badge ${v.tipo === 'Assada' ? 'badge-red' : 'badge-blue'}">${v.tipo}</span></td>
+          <td><strong>${v.quantidade}</strong></td>
+          <td>${(() => { const pg = fmtPagamento(v.pagamentos); return pg.includes('+') ? `<span style="font-size:0.78rem;color:var(--gray-700)">${pg}</span>` : `<span class="badge badge-gray">${pg}</span>`; })()}</td>
           <td><strong>${brl(v.total)}</strong></td>
           <td style="color:var(--green-dark);font-weight:600">${brl(v.lucro)}</td>
         </tr>`).join('')}
         </tbody>
       </table>`;
 
-  // Ranking de sabores mais vendidos no período
   const rankMap = {};
-  vendasHoje.forEach(v => {
+  vendas.forEach(v => {
     const key = v.sabor + '|' + v.tamanho;
     if (!rankMap[key]) rankMap[key] = { sabor: v.sabor, tamanho: v.tamanho, qtd: 0, total: 0 };
-    rankMap[key].qtd += v.qtd;
-    rankMap[key].total += v.total;
+    rankMap[key].qtd += Number(v.quantidade);
+    rankMap[key].total += Number(v.total);
   });
   const ranking = Object.values(rankMap).sort((a, b) => b.qtd - a.qtd);
   const rankingWrap = document.getElementById('ranking-wrap');
@@ -1154,12 +1164,18 @@ function renderDashboard() {
       </div>`;
   }
 
-  // Caixas do dia
   const caixasWrap = document.getElementById('caixas-dia-wrap');
-  const caixas = load(KEYS.caixas) || [];
-  const hoje = new Date().toDateString();
-  const caixasHoje = caixas.filter(c => new Date(c.abertura.timestamp).toDateString() === hoje);
+  const caixasHoje = caixasData || [];
   if (caixasHoje.length === 0) { caixasWrap.innerHTML = ''; return; }
+
+  const caixaMap = {};
+  (vendasHojeData || []).forEach(v => {
+    if (!v.caixa_id) return;
+    if (!caixaMap[v.caixa_id]) caixaMap[v.caixa_id] = { tv: 0, tl: 0, tp: 0 };
+    caixaMap[v.caixa_id].tv += Number(v.total);
+    caixaMap[v.caixa_id].tl += Number(v.lucro);
+    caixaMap[v.caixa_id].tp += Number(v.quantidade);
+  });
 
   caixasWrap.innerHTML = `
     <div class="table-wrap">
@@ -1171,22 +1187,18 @@ function renderDashboard() {
           <th>Operador</th><th>Abertura</th><th>Fechamento</th><th>Pizzas</th><th>Total Vendas</th><th>Lucro</th><th>Troco Final</th>
         </tr></thead>
         <tbody>${caixasHoje.map(c => {
-          const vendasC = state.hist.filter(h => h.tipo === 'venda' && (c.vendaIds || []).includes(h.id));
-          const tv = vendasC.reduce((a, h) => a + h.total, 0);
-          const tl = vendasC.reduce((a, h) => a + h.lucro, 0);
-          const tp = vendasC.reduce((a, h) => a + h.qtd, 0);
+          const cv = caixaMap[c.id] || { tv: 0, tl: 0, tp: 0 };
           const status = c.fechamento
-            ? `<span class="badge badge-gray">Fechado ${fmtTime(c.fechamento.timestamp)}</span>`
+            ? `<span class="badge badge-gray">Fechado ${fmtTime(c.fechamento)}</span>`
             : `<span class="badge badge-green">Aberto</span>`;
-          const trocoFinal = c.fechamento ? brl(c.fechamento.trocoFinal) : '—';
           return `<tr>
-            <td><strong>${c.operadorNome}</strong></td>
-            <td>${fmtTime(c.abertura.timestamp)}<br><small style="color:var(--gray-500)">${brl(c.abertura.trocoInicial)} inicial</small></td>
+            <td><strong>${c.funcionario_nome}</strong></td>
+            <td>${fmtTime(c.abertura)}<br><small style="color:var(--gray-500)">${brl(c.troco_inicial)} inicial</small></td>
             <td>${status}</td>
-            <td>${tp}</td>
-            <td><strong>${brl(tv)}</strong></td>
-            <td style="color:var(--green-dark);font-weight:600">${brl(tl)}</td>
-            <td>${trocoFinal}</td>
+            <td>${cv.tp}</td>
+            <td><strong>${brl(cv.tv)}</strong></td>
+            <td style="color:var(--green-dark);font-weight:600">${brl(cv.tl)}</td>
+            <td>${c.fechamento ? brl(c.troco_final) : '—'}</td>
           </tr>`;
         }).join('')}
         </tbody>
@@ -1410,13 +1422,6 @@ async function confirmarVenda() {
     dados: { sabor: item.sabor, tamanho: item.tamanho, tipoVenda, qtd: qty, pagamentos: pagamentosJson, precoUnit: preco, total, lucro },
   });
 
-  state.hist.push({
-    id: uid(), tipo: 'venda', timestamp: Date.now(), itemId,
-    sabor: item.sabor, tamanho: item.tamanho, tipoVenda, qtd: qty,
-    pagamento: pagamentoStr, precoUnit: preco, total, lucro,
-  });
-  localStorage.setItem(KEYS.hist, JSON.stringify(state.hist));
-
   await carregarCardapio();
   toast(`Venda registrada! ${qty}x ${itemLabel(item)} — ${brl(total)}`, 'success');
   document.getElementById('sell-qty').value = 1;
@@ -1517,12 +1522,6 @@ async function confirmarEntrada() {
     dados: { itemId, sabor: item.sabor, tamanho: item.tamanho, qtd: qty },
   });
 
-  state.hist.push({
-    id: uid(), tipo: 'entrada', timestamp: Date.now(), itemId,
-    sabor: item.sabor, tamanho: item.tamanho, qtd: qty,
-  });
-  localStorage.setItem(KEYS.hist, JSON.stringify(state.hist));
-
   await carregarCardapio();
   fecharModal('modal-entrada');
   toast(`Entrada de ${qty} un. de ${itemLabel(item)} registrada!`, 'success');
@@ -1557,12 +1556,6 @@ async function salvarAjuste() {
     dados: { itemId, sabor: item.sabor, tamanho: item.tamanho, qtdAnterior, qtd: novaQty, motivo },
   });
 
-  state.hist.push({
-    id: uid(), tipo: 'ajuste', timestamp: Date.now(), itemId,
-    sabor: item.sabor, tamanho: item.tamanho, qtdAnterior, qtd: novaQty, motivo,
-  });
-  localStorage.setItem(KEYS.hist, JSON.stringify(state.hist));
-
   await carregarCardapio();
   fecharModal('modal-ajuste');
   toast(`Estoque de ${itemLabel(item)} ajustado: ${qtdAnterior} → ${novaQty} un.`, 'success');
@@ -1582,7 +1575,7 @@ function abrirModalCardapio(id) {
   document.getElementById('cp-sabor').focus();
 }
 
-function salvarCardapio() {
+async function salvarCardapio() {
   const sabor = document.getElementById('cp-sabor').value.trim();
   const tamanho = document.getElementById('cp-tamanho').value;
   const custo = parseFloat(document.getElementById('cp-custo').value);
@@ -1596,41 +1589,42 @@ function salvarCardapio() {
   if (isNaN(assada) || assada < 0) return toast('Informe o preço da assada.', 'error');
 
   if (editId) {
-    const idx = state.cardapio.findIndex(i => i.id === editId);
-    if (idx >= 0) {
-      state.cardapio[idx] = { ...state.cardapio[idx], sabor, tamanho, custo, precoCongelada: congelada, precoAssada: assada };
-    }
+    const { error } = await db.from('cardapio').update({
+      sabor, tamanho, custo, preco_cong: congelada, preco_ass: assada,
+    }).eq('id', Number(editId));
+    if (error) return toast('Erro ao atualizar item.', 'error');
     toast('Item atualizado com sucesso!', 'success');
   } else {
-    const newId = uid();
-    state.cardapio.push({ id: newId, sabor, tamanho, custo, precoCongelada: congelada, precoAssada: assada });
-    if (state.estoque[newId] === undefined) state.estoque[newId] = 0;
+    const { data: novo, error } = await db.from('cardapio').insert({
+      sabor, tamanho, custo, preco_cong: congelada, preco_ass: assada, estoque_min: config.estoqueMinGlobal,
+    }).select().single();
+    if (error || !novo) return toast('Erro ao cadastrar item.', 'error');
+    await db.from('estoque').insert({ cardapio_id: novo.id, quantidade: 0 });
     toast('Item cadastrado com sucesso!', 'success');
   }
 
-  persist();
+  await carregarCardapio();
   fecharModal('modal-cardapio');
   renderProdutos();
 }
 
-function excluirCardapio(id) {
+async function excluirCardapio(id) {
   const item = state.cardapio.find(i => i.id === id);
   if (!item) return;
   if (!confirm(`Excluir "${itemLabel(item)}"? Esta ação não pode ser desfeita.`)) return;
-  state.cardapio = state.cardapio.filter(i => i.id !== id);
-  delete state.estoque[id];
-  persist();
+  const { error } = await db.from('cardapio').delete().eq('id', Number(id));
+  if (error) return toast('Erro ao excluir item.', 'error');
   toast('Item excluído.', '');
+  await carregarCardapio();
   renderProdutos();
 }
 
-function salvarEstoqueMin(id, value) {
+async function salvarEstoqueMin(id, value) {
   const min = parseInt(value);
   if (isNaN(min) || min < 0) return;
+  await db.from('cardapio').update({ estoque_min: min }).eq('id', Number(id));
   const item = state.cardapio.find(i => i.id === id);
-  if (!item) return;
-  item.estoqueMin = min;
-  persist();
+  if (item) item.estoqueMin = min;
 }
 
 // ===================== HISTÓRICO =====================
@@ -1645,44 +1639,50 @@ function bindHistFilters() {
   });
 }
 
-function renderHistorico() {
-  const filtered = histFilter === 'todos'
-    ? state.hist
-    : state.hist.filter(h => h.tipo === histFilter);
+async function renderHistorico() {
+  document.getElementById('historico-wrap').innerHTML = '<div class="empty-state"><i class="ti ti-loader"></i><p>Carregando...</p></div>';
+  let query = db.from('historico').select('*').order('created_at', { ascending: false }).limit(200);
+  if (histFilter !== 'todos') query = query.eq('tipo', histFilter);
+  const { data } = await query;
 
-  const sorted = [...filtered].sort((a, b) => b.timestamp - a.timestamp);
-
-  if (sorted.length === 0) {
+  if (!data || data.length === 0) {
     document.getElementById('historico-wrap').innerHTML = '<div class="empty-state"><i class="ti ti-history-off"></i><p>Nenhuma movimentação encontrada</p></div>';
     return;
   }
+
+  const items = data.map(h => {
+    const d = h.dados || {};
+    const pagamento = fmtPagamento(d.pagamentos);
+    return { ...h, d, pagamento };
+  });
 
   document.getElementById('historico-wrap').innerHTML = `
     <table>
       <thead><tr>
         <th>Data/Hora</th><th>Tipo</th><th>Item</th><th>Qtd</th><th class="hide-mobile">Preparo</th><th class="hide-mobile">Pagamento</th><th>Total</th>
       </tr></thead>
-      <tbody>${sorted.map(h => {
+      <tbody>${items.map(h => {
+        const d = h.d;
         const tipoBadge = h.tipo === 'venda'
           ? '<span class="badge badge-red">Venda</span>'
           : h.tipo === 'entrada'
             ? '<span class="badge badge-green">Entrada</span>'
             : '<span class="badge badge-orange">&#9881; Ajuste</span>';
         const itemDesc = h.tipo === 'ajuste'
-          ? `<strong>${h.sabor}</strong> <span style="color:var(--gray-500)">${h.tamanho}</span> — de ${h.qtdAnterior} para ${h.qtd} <span style="color:var(--gray-500);font-size:0.8rem">(${h.motivo})</span>`
-          : `${h.sabor} <span style="color:var(--gray-500)">${h.tamanho}</span>`;
+          ? `<strong>${d.sabor}</strong> <span style="color:var(--gray-500)">${d.tamanho}</span> — de ${d.qtdAnterior} para ${d.qtd} <span style="color:var(--gray-500);font-size:0.8rem">(${d.motivo})</span>`
+          : `${d.sabor} <span style="color:var(--gray-500)">${d.tamanho}</span>`;
         return `<tr>
-          <td style="white-space:nowrap;font-size:0.8rem">${fmtDateTime(h.timestamp)}</td>
+          <td style="white-space:nowrap;font-size:0.8rem">${fmtDateTime(h.created_at)}</td>
           <td>${tipoBadge}</td>
           <td>${itemDesc}</td>
-          <td>${h.tipo === 'ajuste' ? '<span style="color:var(--gray-500)">—</span>' : h.qtd}</td>
-          <td class="hide-mobile">${h.tipoVenda ? `<span class="badge ${h.tipoVenda === 'Assada' ? 'badge-red' : 'badge-blue'}">${h.tipoVenda}</span>` : '—'}</td>
-          <td class="hide-mobile">${h.pagamento
+          <td>${h.tipo === 'ajuste' ? '<span style="color:var(--gray-500)">—</span>' : d.qtd}</td>
+          <td class="hide-mobile">${d.tipoVenda ? `<span class="badge ${d.tipoVenda === 'Assada' ? 'badge-red' : 'badge-blue'}">${d.tipoVenda}</span>` : '—'}</td>
+          <td class="hide-mobile">${h.pagamento && h.pagamento !== '—'
             ? (h.pagamento.includes('+')
                 ? `<span style="font-size:0.78rem;color:var(--gray-700)">${h.pagamento}</span>`
                 : `<span class="badge badge-gray">${h.pagamento}</span>`)
             : '—'}</td>
-          <td>${h.tipo === 'venda' ? `<strong>${brl(h.total)}</strong>` : '<span style="color:var(--gray-500)">—</span>'}</td>
+          <td>${h.tipo === 'venda' ? `<strong>${brl(d.total)}</strong>` : '<span style="color:var(--gray-500)">—</span>'}</td>
         </tr>`;
       }).join('')}
       </tbody>
@@ -1690,9 +1690,9 @@ function renderHistorico() {
 }
 
 // ===================== CONFIGURAÇÕES =====================
-function renderConfiguracoes() {
-  const users = load(KEYS.usuarios) || [];
-  const funcionarios = users.filter(u => u.perfil === 'funcionario');
+async function renderConfiguracoes() {
+  const { data } = await db.from('usuarios').select('id,nome,usuario').eq('perfil', 'funcionario');
+  const funcionarios = data || [];
   document.getElementById('config-content').innerHTML = `
     <div class="config-grid">
       <div class="card">
@@ -1770,24 +1770,24 @@ function salvarConfig() {
   toast('Configurações salvas!', 'success');
 }
 
-function salvarSenha() {
+async function salvarSenha() {
   const nova = document.getElementById('cfg-nova-senha').value;
   const conf = document.getElementById('cfg-conf-senha').value;
   if (!nova || nova.length < 3) return toast('Senha deve ter pelo menos 3 caracteres.', 'error');
   if (nova !== conf) return toast('As senhas não conferem.', 'error');
-  const users = load(KEYS.usuarios) || [];
-  const idx = users.findIndex(u => u.id === currentUser.id);
-  if (idx < 0) return;
-  users[idx].senha = nova;
-  localStorage.setItem(KEYS.usuarios, JSON.stringify(users));
+  const { error } = await db.from('usuarios').update({ senha: nova }).eq('id', currentUser.id);
+  if (error) return toast('Erro ao alterar senha.', 'error');
   document.getElementById('cfg-nova-senha').value = '';
   document.getElementById('cfg-conf-senha').value = '';
   toast('Senha alterada com sucesso!', 'success');
 }
 
-function abrirModalFuncionario(id) {
-  const users = load(KEYS.usuarios) || [];
-  const func = id ? users.find(u => u.id === id) : null;
+async function abrirModalFuncionario(id) {
+  let func = null;
+  if (id) {
+    const { data } = await db.from('usuarios').select('*').eq('id', Number(id)).single();
+    func = data;
+  }
   document.getElementById('modal-func-title').textContent = func ? 'Editar Funcionário' : 'Novo Funcionário';
   document.getElementById('func-nome').value = func ? func.nome : '';
   document.getElementById('func-usuario').value = func ? func.usuario : '';
@@ -1797,40 +1797,33 @@ function abrirModalFuncionario(id) {
   document.getElementById('func-nome').focus();
 }
 
-function salvarFuncionario() {
+async function salvarFuncionario() {
   const nome = document.getElementById('func-nome').value.trim();
   const usuario = document.getElementById('func-usuario').value.trim().toLowerCase();
   const senha = document.getElementById('func-senha').value;
   const editId = document.getElementById('func-edit-id').value;
   if (!nome) return toast('Informe o nome.', 'error');
   if (!usuario) return toast('Informe o usuário.', 'error');
-  const users = load(KEYS.usuarios) || [];
-  const duplicate = users.find(u => u.usuario === usuario && String(u.id) !== String(editId));
-  if (duplicate) return toast('Usuário já existe.', 'error');
   if (editId) {
-    const idx = users.findIndex(u => String(u.id) === String(editId));
-    if (idx >= 0) {
-      users[idx].nome = nome;
-      users[idx].usuario = usuario;
-      if (senha) users[idx].senha = senha;
-    }
+    const updates = { nome, usuario };
+    if (senha) updates.senha = senha;
+    const { error } = await db.from('usuarios').update(updates).eq('id', Number(editId));
+    if (error) return toast(error.code === '23505' ? 'Usuário já existe.' : 'Erro ao atualizar.', 'error');
     toast('Funcionário atualizado!', 'success');
   } else {
     if (!senha || senha.length < 3) return toast('Informe uma senha de pelo menos 3 caracteres.', 'error');
-    users.push({ id: uid(), nome, usuario, senha, perfil: 'funcionario' });
+    const { error } = await db.from('usuarios').insert({ nome, usuario, senha, perfil: 'funcionario' });
+    if (error) return toast(error.code === '23505' ? 'Usuário já existe.' : 'Erro ao cadastrar.', 'error');
     toast('Funcionário cadastrado!', 'success');
   }
-  localStorage.setItem(KEYS.usuarios, JSON.stringify(users));
   fecharModal('modal-funcionario');
   renderConfiguracoes();
 }
 
-function excluirFuncionario(id) {
-  const users = load(KEYS.usuarios) || [];
-  const func = users.find(u => String(u.id) === String(id));
-  if (!func) return;
-  if (!confirm(`Excluir funcionário "${func.nome}"?`)) return;
-  localStorage.setItem(KEYS.usuarios, JSON.stringify(users.filter(u => String(u.id) !== String(id))));
+async function excluirFuncionario(id) {
+  if (!confirm('Excluir este funcionário?')) return;
+  const { error } = await db.from('usuarios').delete().eq('id', Number(id));
+  if (error) return toast('Erro ao excluir funcionário.', 'error');
   toast('Funcionário excluído.', '');
   renderConfiguracoes();
 }
