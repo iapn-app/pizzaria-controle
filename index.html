@@ -2074,7 +2074,7 @@ function baixarRelatorioPDF() {
   const hoje = new Date().toISOString().slice(0, 10);
 
   const wrap = document.createElement('div');
-  wrap.style.cssText = 'font-family:Arial,Helvetica,sans-serif;font-size:10px;color:#1a1a1a;background:white;padding:16px';
+  wrap.style.cssText = 'font-family:Arial,Helvetica,sans-serif;font-size:10px;color:#1a1a1a;background:white;padding:16px;overflow:hidden';
 
   wrap.innerHTML = `
     <div style="background:#CC0000;color:white;padding:14px 18px;border-radius:6px;margin-bottom:18px;display:flex;justify-content:space-between;align-items:center">
@@ -2112,12 +2112,12 @@ function baixarRelatorioPDF() {
   document.body.appendChild(wrap);
 
   html2pdf().set({
-    margin: [8, 8, 8, 8],
+    margin: [10, 10, 10, 10],
     filename: `reposicao_${hoje}.pdf`,
-    image: { type: 'jpeg', quality: 0.97 },
-    html2canvas: { scale: 2, useCORS: true, logging: false },
+    image: { type: 'jpeg', quality: 0.98 },
+    html2canvas: { scale: 2, useCORS: true, scrollY: 0 },
     jsPDF: { unit: 'mm', format: 'a4', orientation: 'landscape' },
-    pagebreak: { mode: ['avoid-all', 'css', 'legacy'] },
+    pagebreak: { mode: ['avoid-all'] },
   }).from(wrap).save().then(() => {
     document.body.removeChild(wrap);
     toast('PDF gerado com sucesso!', 'success');
