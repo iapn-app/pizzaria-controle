@@ -126,6 +126,13 @@
     .kpi-card .value { font-size: 1.75rem; font-weight: 700; }
     .kpi-card { border: 1px solid rgba(204,0,0,0.12); box-shadow: 0 0 18px rgba(204,0,0,0.10); transition: all 0.2s ease; }
     .kpi-card:hover { transform: scale(1.03); box-shadow: 0 0 28px rgba(204,0,0,0.22); }
+    /* QTY CONTROL */
+    .qty-control { display: flex; align-items: center; gap: 0.5rem; }
+    .qty-btn { width: 40px; height: 40px; border: 1.5px solid var(--gray-300); border-radius: var(--radius); background: white; font-size: 1.3rem; cursor: pointer; display: flex; align-items: center; justify-content: center; font-weight: 700; color: var(--gray-700); flex-shrink: 0; line-height: 1; }
+    .qty-btn:hover { background: var(--gray-100); border-color: var(--gray-500); }
+    #sell-qty { width: 70px; text-align: center; }
+    /* PERIODO SELECTOR */
+    .periodo-selector { background: white; border-radius: var(--radius); padding: 0.875rem 1.25rem; box-shadow: var(--shadow); margin-bottom: 1.25rem; display: flex; align-items: center; flex-wrap: wrap; gap: 0.75rem; }
     /* ALERTS */
     .alert {
       background: #fff3cd;
@@ -346,6 +353,11 @@
     }
     @media (max-width: 768px) {
       .hide-mobile { display: none; }
+      .toggle-btn { min-height: 52px; font-size: 0.95rem; }
+      #sell-item { font-size: 16px; }
+      .qty-btn { width: 52px; height: 52px; font-size: 1.6rem; }
+      #sell-qty { font-size: 16px; width: 60px; }
+      #btn-confirmar-venda { position: sticky; bottom: 0.75rem; z-index: 50; padding: 1.1rem; box-shadow: 0 -2px 16px rgba(0,0,0,0.18); }
     }
   </style>
 </head>
@@ -429,14 +441,29 @@
 <main>
   <!-- DASHBOARD -->
   <div id="tab-dashboard" class="tab-content active">
+    <div class="periodo-selector">
+      <span style="font-size:0.78rem;font-weight:700;color:var(--gray-600);text-transform:uppercase;letter-spacing:0.5px;white-space:nowrap">Período:</span>
+      <div style="display:flex;gap:0.4rem;flex-wrap:wrap">
+        <button class="filter-btn active" id="pd-hoje" onclick="setDashPeriod('hoje',this)">Hoje</button>
+        <button class="filter-btn" id="pd-semana" onclick="setDashPeriod('semana',this)">Esta semana</button>
+        <button class="filter-btn" id="pd-mes" onclick="setDashPeriod('mes',this)">Este mês</button>
+        <button class="filter-btn" id="pd-custom" onclick="setDashPeriod('personalizado',this)">Personalizado</button>
+      </div>
+      <div id="dash-custom-range" style="display:none;align-items:center;gap:0.5rem;flex-wrap:wrap">
+        <input type="date" id="dash-start" onchange="setDashCustomRange()" style="width:auto;padding:0.4rem 0.6rem;font-size:0.82rem">
+        <span style="color:var(--gray-500);font-size:0.82rem">até</span>
+        <input type="date" id="dash-end" onchange="setDashCustomRange()" style="width:auto;padding:0.4rem 0.6rem;font-size:0.82rem">
+      </div>
+    </div>
     <div class="kpi-grid" id="kpi-grid"></div>
     <div id="alerts-container"></div>
     <div class="table-wrap">
       <div class="table-header">
-        <h2><i class="ti ti-receipt"></i> Vendas de Hoje</h2>
+        <h2><i class="ti ti-receipt"></i> Vendas do Período</h2>
       </div>
       <div id="vendas-hoje-table"></div>
     </div>
+    <div id="ranking-wrap" style="margin-top:1.25rem"></div>
     <div id="caixas-dia-wrap" style="margin-top:1.25rem"></div>
   </div>
 
@@ -459,7 +486,11 @@
         </div>
         <div class="form-group">
           <label>Quantidade</label>
-          <input type="number" id="sell-qty" value="1" min="1" max="999">
+          <div class="qty-control">
+            <button type="button" class="qty-btn" onclick="changeQty(-1)">&#8722;</button>
+            <input type="number" id="sell-qty" value="1" min="1" max="999">
+            <button type="button" class="qty-btn" onclick="changeQty(1)">+</button>
+          </div>
         </div>
         <div class="form-group" style="margin-bottom:0">
           <label>Forma de Pagamento</label>
@@ -646,6 +677,7 @@
   </div>
 </div>
 
+<input type="file" id="import-file" accept=".json" style="display:none">
 <div id="toast-container"></div>
 
 <script>
@@ -661,6 +693,9 @@ let tipoVenda = 'Congelada';
 let paymentRows = [{ method: 'Dinheiro', value: '' }];
 let produtosQuery = '';
 let histFilter = 'todos';
+let dashPeriod = 'hoje';
+let dashStart = '';
+let dashEnd = '';
 
 // ===================== INIT =====================
 function init() {
@@ -695,6 +730,7 @@ function init() {
   bindSellListeners();
   bindHistFilters();
   bindModalClose();
+  bindImportFile();
 
   document.getElementById('login-usuario').addEventListener('keydown', e => {
     if (e.key === 'Enter') document.getElementById('login-senha').focus();
@@ -931,9 +967,99 @@ function renderTab(tab) {
   else if (tab === 'configuracoes') renderConfiguracoes();
 }
 
+// ===================== PERÍODO DASHBOARD =====================
+function setDashPeriod(period, btn) {
+  dashPeriod = period;
+  document.querySelectorAll('.periodo-selector .filter-btn').forEach(b => b.classList.remove('active'));
+  if (btn) btn.classList.add('active');
+  const customEl = document.getElementById('dash-custom-range');
+  if (customEl) customEl.style.display = period === 'personalizado' ? 'flex' : 'none';
+  renderDashboard();
+}
+
+function setDashCustomRange() {
+  dashStart = document.getElementById('dash-start').value;
+  dashEnd = document.getElementById('dash-end').value;
+  if (dashStart && dashEnd) renderDashboard();
+}
+
+function getDashPeriodRange() {
+  const now = new Date();
+  const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
+  const todayEnd = todayStart + 86400000 - 1;
+  if (dashPeriod === 'semana') {
+    const dow = now.getDay();
+    const weekStart = todayStart - (dow === 0 ? 6 : dow - 1) * 86400000;
+    return { start: weekStart, end: todayEnd };
+  }
+  if (dashPeriod === 'mes') {
+    return { start: new Date(now.getFullYear(), now.getMonth(), 1).getTime(), end: todayEnd };
+  }
+  if (dashPeriod === 'personalizado' && dashStart && dashEnd) {
+    return {
+      start: new Date(dashStart + 'T00:00:00').getTime(),
+      end: new Date(dashEnd + 'T23:59:59').getTime(),
+    };
+  }
+  return { start: todayStart, end: todayEnd };
+}
+
+// ===================== QTY CONTROL =====================
+function changeQty(delta) {
+  const input = document.getElementById('sell-qty');
+  const next = Math.max(1, Math.min(999, (parseInt(input.value) || 1) + delta));
+  input.value = next;
+  updateSellSummary();
+}
+
+// ===================== BACKUP =====================
+function exportarDados() {
+  const data = { _exportDate: new Date().toISOString(), _version: '1.0' };
+  Object.entries(KEYS).forEach(([k, v]) => { const val = load(v); if (val !== null) data[k] = val; });
+  const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = 'pizzadoscria_backup_' + new Date().toISOString().slice(0, 10) + '.json';
+  a.click();
+  URL.revokeObjectURL(url);
+  toast('Backup exportado com sucesso!', 'success');
+}
+
+function importarDados() {
+  document.getElementById('import-file').click();
+}
+
+function bindImportFile() {
+  document.getElementById('import-file').addEventListener('change', function (e) {
+    const file = e.target.files[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = function (ev) {
+      try {
+        const data = JSON.parse(ev.target.result);
+        if (!data.cardapio && !data.hist && !data.estoque) {
+          return toast('Arquivo inválido: não parece ser um backup do sistema.', 'error');
+        }
+        if (!confirm('Isso vai substituir todos os dados atuais. Tem certeza?')) return;
+        Object.entries(KEYS).forEach(([k, v]) => {
+          if (data[k] !== undefined) localStorage.setItem(v, JSON.stringify(data[k]));
+        });
+        toast('Dados importados! Recarregando...', 'success');
+        setTimeout(() => location.reload(), 1200);
+      } catch {
+        toast('Erro ao ler o arquivo. Verifique se é um backup válido.', 'error');
+      }
+    };
+    reader.readAsText(file);
+    this.value = '';
+  });
+}
+
 // ===================== DASHBOARD =====================
 function renderDashboard() {
-  const vendasHoje = state.hist.filter(h => h.tipo === 'venda' && isToday(h.timestamp));
+  const { start, end } = getDashPeriodRange();
+  const vendasHoje = state.hist.filter(h => h.tipo === 'venda' && h.timestamp >= start && h.timestamp <= end);
   const totalVendas = vendasHoje.reduce((a, h) => a + h.total, 0);
   const totalLucro = vendasHoje.reduce((a, h) => a + h.lucro, 0);
   const totalPizzas = vendasHoje.reduce((a, h) => a + h.qtd, 0);
@@ -981,16 +1107,16 @@ function renderDashboard() {
     alertsEl.innerHTML = `<div class="alert danger"><i class="ti ti-alert-triangle"></i><div>${msg}</div></div>`;
   }
 
-  // Tabela de vendas do dia
+  // Tabela de vendas do período
   const sorted = [...vendasHoje].sort((a, b) => b.timestamp - a.timestamp);
   document.getElementById('vendas-hoje-table').innerHTML = sorted.length === 0
-    ? `<div class="empty-state"><i class="ti ti-receipt-off"></i><p>Nenhuma venda registrada hoje</p></div>`
+    ? `<div class="empty-state"><i class="ti ti-receipt-off"></i><p>Nenhuma venda no período</p></div>`
     : `<table>
         <thead><tr>
-          <th>Horário</th><th>Sabor</th><th>Tamanho</th><th>Tipo</th><th>Qtd</th><th>Pagamento</th><th>Total</th><th>Lucro</th>
+          <th>Data/Hora</th><th>Sabor</th><th>Tamanho</th><th>Tipo</th><th>Qtd</th><th>Pagamento</th><th>Total</th><th>Lucro</th>
         </tr></thead>
         <tbody>${sorted.map(v => `<tr>
-          <td>${fmtTime(v.timestamp)}</td>
+          <td style="font-size:0.8rem">${dashPeriod === 'hoje' ? fmtTime(v.timestamp) : fmtDateTime(v.timestamp)}</td>
           <td>${v.sabor}</td>
           <td>${v.tamanho}</td>
           <td><span class="badge ${v.tipoVenda === 'Assada' ? 'badge-red' : 'badge-blue'}">${v.tipoVenda}</span></td>
@@ -1001,6 +1127,36 @@ function renderDashboard() {
         </tr>`).join('')}
         </tbody>
       </table>`;
+
+  // Ranking de sabores mais vendidos no período
+  const rankMap = {};
+  vendasHoje.forEach(v => {
+    const key = v.sabor + '|' + v.tamanho;
+    if (!rankMap[key]) rankMap[key] = { sabor: v.sabor, tamanho: v.tamanho, qtd: 0, total: 0 };
+    rankMap[key].qtd += v.qtd;
+    rankMap[key].total += v.total;
+  });
+  const ranking = Object.values(rankMap).sort((a, b) => b.qtd - a.qtd);
+  const rankingWrap = document.getElementById('ranking-wrap');
+  if (rankingWrap) {
+    rankingWrap.innerHTML = ranking.length === 0 ? '' : `
+      <div class="table-wrap">
+        <div class="table-header">
+          <h2><i class="ti ti-trophy"></i> Sabores Mais Vendidos</h2>
+        </div>
+        <table>
+          <thead><tr><th>#</th><th>Sabor</th><th>Tamanho</th><th>Qtd Vendida</th><th>Total R$</th></tr></thead>
+          <tbody>${ranking.map((r, i) => `<tr>
+            <td style="color:var(--gray-500);font-weight:700">${i + 1}º</td>
+            <td><strong>${r.sabor}</strong></td>
+            <td>${r.tamanho}</td>
+            <td><strong>${r.qtd}</strong> un.</td>
+            <td><strong>${brl(r.total)}</strong></td>
+          </tr>`).join('')}
+          </tbody>
+        </table>
+      </div>`;
+  }
 
   // Caixas do dia
   const caixasWrap = document.getElementById('caixas-dia-wrap');
@@ -1579,6 +1735,19 @@ function renderConfiguracoes() {
               </tr>`).join('')}
               </tbody>
             </table>`}
+      </div>
+    </div>
+    <div class="card" style="margin-top:1.25rem">
+      <h2 style="font-size:0.95rem;font-weight:700;margin-bottom:1.25rem;display:flex;align-items:center;gap:0.5rem"><i class="ti ti-database-export"></i> Backup &amp; Restauração</h2>
+      <div style="display:flex;gap:0.75rem;flex-wrap:wrap;align-items:flex-start">
+        <div>
+          <button class="btn btn-primary" onclick="exportarDados()"><i class="ti ti-download"></i> Exportar dados</button>
+          <p style="font-size:0.78rem;color:var(--gray-500);margin-top:0.4rem">Gera um arquivo .json com todos os dados do sistema</p>
+        </div>
+        <div>
+          <button class="btn btn-secondary" onclick="importarDados()"><i class="ti ti-upload"></i> Importar dados</button>
+          <p style="font-size:0.78rem;color:var(--gray-500);margin-top:0.4rem">Restaura a partir de um backup .json — substitui tudo</p>
+        </div>
       </div>
     </div>`;
 }
